@@ -20,7 +20,7 @@ futures-util = { version = "0.3", default-features = false, features = ["std", "
 uuid = { version = "1", features = ["v7", "serde"] }
 sha2 = "0.11"
 hex = "0.4"
-base64 = "0.22"
+base64 = "0.23"
 unicode-normalization = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["now", "serde"] }
 toml = "1"
