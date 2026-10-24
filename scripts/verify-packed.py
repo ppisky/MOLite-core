@@ -77,13 +77,18 @@ def verify(directory, reference=None):
             assert dll.molite_open(path, len(path), c.byref(engine)) == 0
             try:
                 if index == 0:
+                    execute(engine, {"op": "conversation.put", "value": {"id": "packed", "title": "Packed conversation"}})
+                    execute(engine, {"op": "prompt_spaces.replace", "id": "assistant", "content": "Local prompt override"})
                     info = execute(engine, {"op": "file.add", "name": "data.txt", "mime": "text/plain", "base64": payload})
                     file_id = info["id"]
                     execute(engine, {"op": "moc.export", "path": str(archive), "passphrase": "local-test-passphrase"})
                 else:
                     execute(engine, {"op": "moc.import", "path": str(archive), "passphrase": "local-test-passphrase"})
                     assert execute(engine, {"op": "file.read", "id": file_id})["base64"] == payload
-                assert execute(engine, {"op": "resource.list", "kind": "scene"}) == []
+                conversations = execute(engine, {"op": "resource.list", "kind": "conversation"})
+                assert len(conversations) == 1 and conversations[0]["id"] == "packed"
+                assert "scene_id" not in conversations[0]
+                assert execute(engine, {"op": "prompt_spaces.get", "id": "assistant"})["source"] == ("override" if index == 0 else "builtin")
             finally:
                 assert dll.molite_close(engine) == 0
         print("DLL: ABI lifecycle, SQLite, encrypted MOC/file roundtrip passed", flush=True)
@@ -109,9 +114,12 @@ def verify(directory, reference=None):
                 base = "http://" + address
                 with opener.open(base + "/health", timeout=10) as response:
                     assert json.load(response)["status"] == "ok"
+                request = urllib.request.Request(base + "/v1/prompt-spaces", headers={"Authorization": "Bearer packed-test"})
+                with opener.open(request, timeout=10) as response:
+                    assert len(json.load(response)) == 4
                 for route in ["operations", "stream"]:
                     request = urllib.request.Request(base + "/v1/" + route,
-                        data=b'{"op":"resource.list","kind":"scene"}',
+                        data=b'{"op":"resource.list","kind":"conversation"}',
                         headers={"Content-Type": "application/json", "Authorization": "Bearer packed-test"})
                     with opener.open(request, timeout=10) as response:
                         body = response.read().decode()

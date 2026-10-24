@@ -2,35 +2,27 @@ use molite_core::{domain::*, store::Store};
 fn setup() -> (tempfile::TempDir, Store) {
     let d = tempfile::tempdir().unwrap();
     let mut s = Store::open(d.path()).unwrap();
-    s.put_scene(
-        Scene {
-            id: "s".into(),
-            title: "s".into(),
+    s.put_conversation(
+        Conversation {
+            id: "c".into(),
+            character_ids: vec![],
+            title: "c".into(),
+            classification: Default::default(),
             injection_scope: vec![],
             narrative: Default::default(),
             ended: false,
-            classification: Default::default(),
         },
         None,
     )
     .unwrap();
-    s.put_conversation(Conversation {
-        id: "c".into(),
-        scene_id: "s".into(),
-        character_ids: vec![],
-        title: "c".into(),
-        classification: Default::default(),
-    })
-    .unwrap();
     (d, s)
 }
 fn record(s: &mut Store, id: &str) {
-    let revision = s.revision("s").unwrap();
+    let revision = s.revision("c").unwrap();
     s.commit_exchange(
         &Exchange {
             request_id: id.into(),
             conversation_id: "c".into(),
-            scene_id: "s".into(),
             revision: 1,
             user: "受伤了".into(),
             assistant: "包扎伤口".into(),
@@ -45,7 +37,7 @@ fn record(s: &mut Store, id: &str) {
 fn revision_invalidates_memory_and_repair_does_not_reset_cadence() {
     let (_d, mut s) = setup();
     record(&mut s, "a");
-    let job = s.begin_extraction("s", true).unwrap().unwrap();
+    let job = s.begin_extraction("c", true).unwrap().unwrap();
     let memory = Memory {
         id: "injury".into(),
         kind: "event".into(),
@@ -69,20 +61,20 @@ fn revision_invalidates_memory_and_repair_does_not_reset_cadence() {
         },
     )
     .unwrap();
-    assert!(!s.snapshot("s", "受伤").unwrap().dimensions["physiological_state"].is_empty());
+    assert!(!s.snapshot("c", "受伤").unwrap().dimensions["physiological_state"].is_empty());
     record(&mut s, "b");
     s.revise_exchange("a", 1, Some("没有受伤".into()), None, false)
         .unwrap();
-    assert!(s.snapshot("s", "受伤").unwrap().memories.is_empty());
+    assert!(s.snapshot("c", "受伤").unwrap().memories.is_empty());
     assert!(s.apply_extraction(&job, &MemoryPatch::default()).is_err());
-    let repair = s.begin_extraction("s", false).unwrap().unwrap();
+    let repair = s.begin_extraction("c", false).unwrap().unwrap();
     assert!(repair.repair);
     assert_eq!(repair.evidence.len(), 1);
     assert_eq!(repair.evidence[0].revision, 2);
     s.apply_extraction(&repair, &MemoryPatch::default())
         .unwrap();
     assert_eq!(
-        s.extraction_status("s").unwrap()["schedule"]["pending_turns"],
+        s.extraction_status("c").unwrap()["schedule"]["pending_turns"],
         1
     );
 }
@@ -90,7 +82,7 @@ fn revision_invalidates_memory_and_repair_does_not_reset_cadence() {
 fn forged_sources_are_rejected_without_acknowledging_batch() {
     let (_d, mut s) = setup();
     record(&mut s, "a");
-    let j = s.begin_extraction("s", true).unwrap().unwrap();
+    let j = s.begin_extraction("c", true).unwrap().unwrap();
     let m = Memory {
         id: "m".into(),
         kind: "world".into(),
@@ -117,7 +109,7 @@ fn forged_sources_are_rejected_without_acknowledging_batch() {
         .is_err()
     );
     assert_eq!(
-        s.extraction_status("s").unwrap()["schedule"]["pending_turns"],
+        s.extraction_status("c").unwrap()["schedule"]["pending_turns"],
         1
     );
 }
@@ -127,7 +119,7 @@ fn repair_preserves_unrelated_facts_and_scopes_require_explicit_selection() {
     let (_d, mut s) = setup();
     for (request, word) in [("a", "伤口"), ("b", "旅行")] {
         record(&mut s, request);
-        let job = s.begin_extraction("s", true).unwrap().unwrap();
+        let job = s.begin_extraction("c", true).unwrap().unwrap();
         let m = Memory {
             id: request.into(),
             kind: "event".into(),
@@ -153,13 +145,14 @@ fn repair_preserves_unrelated_facts_and_scopes_require_explicit_selection() {
         .unwrap();
     }
     s.revise_exchange("a", 1, None, None, true).unwrap();
-    let repair = s.begin_extraction("s", false).unwrap().unwrap();
+    let repair = s.begin_extraction("c", false).unwrap().unwrap();
     assert_eq!(repair.affected_ids, vec!["a"]);
     assert!(repair.evidence.is_empty());
     s.apply_extraction(&repair, &MemoryPatch::default())
         .unwrap();
-    assert_eq!(s.snapshot("s", "旅行").unwrap().memories.len(), 1);
-    let mut other = Scene {
+    assert_eq!(s.snapshot("c", "旅行").unwrap().memories.len(), 1);
+    let mut other = Conversation {
+        character_ids: vec![],
         id: "other".into(),
         title: "other".into(),
         injection_scope: vec![],
@@ -167,10 +160,13 @@ fn repair_preserves_unrelated_facts_and_scopes_require_explicit_selection() {
         ended: false,
         classification: Default::default(),
     };
-    s.put_scene(other.clone(), None).unwrap();
+    s.put_conversation(other.clone(), None).unwrap();
     assert!(s.snapshot("other", "旅行").unwrap().memories.is_empty());
-    other.injection_scope = vec!["s".into()];
-    s.put_scene(other, None).unwrap();
+    other.injection_scope = vec!["c".into()];
+    s.put_conversation(other, None).unwrap();
     assert_eq!(s.snapshot("other", "旅行").unwrap().memories.len(), 1);
-    assert!(s.delete_scene("s", s.revision("s").unwrap()).is_err());
+    assert!(
+        s.delete_conversation("c", s.revision("c").unwrap())
+            .is_err()
+    );
 }

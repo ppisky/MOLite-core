@@ -29,3 +29,12 @@
 MOLite原生运行数据选择显式MOC扩展，与原版角色模块共存，未更改原生manifest含义。实际接口以docs/api.zh-CN.md、docs/c-abi.zh-CN.md及include/molite.h为准。所有Git提交仅在D:/MOLite-core，本次未改动或推送MOMO参考仓库。
 
 最终验收：cargo fmt --check、cargo test --locked（30项）、cargo clippy --locked --all-targets -- -D warnings、cargo build --release --locked、真实C调用脚本与git diff --check均通过。Release DLL为9,791,488字节，HTTP程序为11,137,536字节；这是构建大小，不是延迟或吞吐量基准。
+
+
+## 对话统一与提示词空间修正
+
+公开资源统一为 conversation，一次创建，直接包含角色、叙事状态、记忆注入范围和分类。提炼、快照、记忆列表、删除统一使用 conversation_id。底层 SQLite 的历史表名是内部实现细节，不再要求宿主创建场景。旧数据库的一对一归属在事务内升级；有歧义的共享归属拒绝自动拆分并保留原数据。
+
+恢复 assistant、roleplay_director、memory_distillation、vision_fallback 四个提示词空间，内置 Markdown 默认文本、本地数据库覆盖、SHA-256 revision、替换/恢复默认及 HTTP 管理接口。三种宿主共用操作；新请求使用新内容，已捕获的请求与记忆维护重试保留原消息。提示词空间属于本地运行配置，不携带到 MOC。原生 MOC 容器仍为v3，MOLite运行数据扩展当前为version=2，不再接受本扩展的旧版schema。
+
+本次验收：独立构建目录 target/conversation-validation 下38项Release测试通过；Clippy、文档、HTTP/SSE、四个提示词空间管理、加密MOC往返及真实C宿主调用通过。现有运行进程保持原状，新二进制位于该目录的release子目录。

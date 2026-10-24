@@ -41,16 +41,17 @@ fn configuration_is_reusable_and_scope_is_explicit() {
         vision_fallback: None,
     })
     .unwrap();
-    let scene = Scene {
-        id: "s".into(),
+    let scene = Conversation {
+        id: "c".into(),
         title: "room".into(),
+        character_ids: vec![],
         injection_scope: vec![],
         narrative: Default::default(),
         ended: false,
         classification: Default::default(),
     };
-    s.put_scene(scene.clone(), Some(0)).unwrap();
-    assert!(s.put_scene(scene, Some(0)).is_err());
+    s.put_conversation(scene.clone(), Some(0)).unwrap();
+    assert!(s.put_conversation(scene, Some(0)).is_err());
     let f = s
         .add_file("notes.txt".into(), "text/plain".into(), b"hello")
         .unwrap();

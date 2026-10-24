@@ -8,7 +8,7 @@ use unicode_normalization::UnicodeNormalization;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Extraction {
-    pub scene_id: String,
+    pub conversation_id: String,
     pub revision: i64,
     pub batch_id: Option<i64>,
     pub repair: bool,
@@ -19,7 +19,7 @@ pub struct Extraction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
     pub id: String,
-    pub scene_id: String,
+    pub conversation_id: String,
     pub revision: i64,
     pub scope_revisions: BTreeMap<String, i64>,
     pub narrative: Narrative,
@@ -48,7 +48,7 @@ impl Store {
             .collect::<std::result::Result<Vec<_>, _>>()?
         };
         tx.execute("DELETE FROM sources", [])?;
-        for (scene, id, body, valid) in rows {
+        for (conversation, id, body, valid) in rows {
             let m: Memory = serde_json::from_str(&body)?;
             m.validate()?;
             let mut stale = false;
@@ -56,22 +56,22 @@ impl Store {
                 let current: Option<(i64, bool)> = tx
                     .query_row(
                         "SELECT revision,deleted FROM exchanges WHERE request=? AND scene=?",
-                        params![source.request_id, scene],
+                        params![source.request_id, conversation],
                         |r| Ok((r.get(0)?, r.get(1)?)),
                     )
                     .optional()?;
                 stale |= current != Some((source.revision, false));
-                tx.execute("INSERT OR IGNORE INTO sources(scene,memory_id,request,revision) VALUES (?,?,?,?)",params![scene,id,source.request_id,source.revision])?;
+                tx.execute("INSERT OR IGNORE INTO sources(scene,memory_id,request,revision) VALUES (?,?,?,?)",params![conversation,id,source.request_id,source.revision])?;
             }
             if stale && valid {
                 tx.execute(
                     "UPDATE memory SET valid=0 WHERE scene=? AND id=?",
-                    params![scene, id],
+                    params![conversation, id],
                 )?;
-                tx.execute("UPDATE runtime SET repair=1 WHERE scene=?", [&scene])?;
+                tx.execute("UPDATE runtime SET repair=1 WHERE scene=?", [&conversation])?;
                 Self::event_tx(
                     &tx,
-                    &scene,
+                    &conversation,
                     "memory.reconcile_invalidated",
                     &json!({"id":id}),
                 )?;
@@ -82,15 +82,14 @@ impl Store {
     }
     pub fn commit_exchange(&mut self, e: &Exchange, expected: i64) -> Result<()> {
         let c: Conversation = self.get("conversation", &e.conversation_id)?;
-        let s: Scene = self.get("scene", &c.scene_id)?;
-        if e.scene_id != c.scene_id
+        if e.conversation_id != c.id
             || e.deleted
             || e.revision != 1
             || e.request_id.is_empty()
             || e.assistant.trim().is_empty()
-            || s.ended
+            || c.ended
         {
-            return Err(Error::Invalid("invalid exchange or ended scene"));
+            return Err(Error::Invalid("invalid exchange or ended conversation"));
         }
         let body = serde_json::to_string(e)?;
         let tx = self
@@ -114,17 +113,19 @@ impl Store {
         let revision: i64 = tx
             .query_row(
                 "SELECT revision FROM runtime WHERE scene=?",
-                [&e.scene_id],
+                [&e.conversation_id],
                 |r| r.get(0),
             )
             .optional()?
             .unwrap_or(0);
         if revision != expected {
-            return Err(Error::Conflict("scene changed during generation; retry"));
+            return Err(Error::Conflict(
+                "conversation changed during generation; retry",
+            ));
         }
         tx.execute(
             "INSERT INTO exchanges(request,conversation,scene,revision,body) VALUES (?,?,?,1,?)",
-            params![e.request_id, e.conversation_id, e.scene_id, body],
+            params![e.request_id, e.conversation_id, e.conversation_id, body],
         )?;
         let t = Turn {
             request_id: e.request_id.clone(),
@@ -133,19 +134,19 @@ impl Store {
         };
         tx.execute(
             "INSERT INTO turns(scene,request,body) VALUES (?,?,?)",
-            params![e.scene_id, e.request_id, serde_json::to_string(&t)?],
+            params![e.conversation_id, e.request_id, serde_json::to_string(&t)?],
         )?;
         tx.execute(
             "UPDATE runtime SET activity=activity+1 WHERE scene=?",
-            [&e.scene_id],
+            [&e.conversation_id],
         )?;
         Self::event_tx(
             &tx,
-            &e.scene_id,
+            &e.conversation_id,
             "exchange.committed",
             &json!({"request_id":e.request_id}),
         )?;
-        Self::lifecycle_tx(&tx, &e.scene_id)?;
+        Self::lifecycle_tx(&tx, &e.conversation_id)?;
         tx.commit()?;
         Ok(())
     }
@@ -189,7 +190,7 @@ impl Store {
         let narrative_sources: Option<String> = tx
             .query_row(
                 "SELECT body FROM resources WHERE kind='narrative_sources' AND id=?",
-                [&e.scene_id],
+                [&e.conversation_id],
                 |r| r.get(0),
             )
             .optional()?;
@@ -197,27 +198,27 @@ impl Store {
             let sources: Vec<Source> = serde_json::from_str(&body)?;
             if sources.iter().any(|s| s.request_id == id) {
                 let body: String = tx.query_row(
-                    "SELECT body FROM resources WHERE kind='scene' AND id=?",
-                    [&e.scene_id],
+                    "SELECT body FROM resources WHERE kind='conversation' AND id=?",
+                    [&e.conversation_id],
                     |r| r.get(0),
                 )?;
-                let mut scene: Scene = serde_json::from_str(&body)?;
-                scene.narrative = Narrative::default();
+                let mut conversation: Conversation = serde_json::from_str(&body)?;
+                conversation.narrative = Narrative::default();
                 tx.execute(
-                    "UPDATE resources SET body=?,revision=revision+1 WHERE kind='scene' AND id=?",
-                    params![serde_json::to_string(&scene)?, e.scene_id],
+                    "UPDATE resources SET body=?,revision=revision+1 WHERE kind='conversation' AND id=?",
+                    params![serde_json::to_string(&conversation)?, e.conversation_id],
                 )?;
             }
         }
         // Frozen work must never commit against revised evidence.
         tx.execute(
             "UPDATE batches SET result=? WHERE scene=? AND result IS NULL",
-            params!["{\"invalidated\":true}", e.scene_id],
+            params!["{\"invalidated\":true}", e.conversation_id],
         )?;
         if delete {
             tx.execute(
                 "DELETE FROM turns WHERE scene=? AND request=?",
-                params![e.scene_id, id],
+                params![e.conversation_id, id],
             )?;
         } else {
             let turn = Turn {
@@ -227,49 +228,60 @@ impl Store {
             };
             tx.execute(
                 "UPDATE turns SET body=? WHERE scene=? AND request=?",
-                params![serde_json::to_string(&turn)?, e.scene_id, id],
+                params![serde_json::to_string(&turn)?, e.conversation_id, id],
             )?;
         }
-        tx.execute("UPDATE runtime SET repair=1 WHERE scene=?", [&e.scene_id])?;
+        tx.execute(
+            "UPDATE runtime SET repair=1 WHERE scene=?",
+            [&e.conversation_id],
+        )?;
         Self::event_tx(
             &tx,
-            &e.scene_id,
+            &e.conversation_id,
             "memory.sources_invalidated",
             &json!({"request_id":id,"revision":e.revision,"repair_pending":true}),
         )?;
         tx.commit()?;
         Ok(e)
     }
-    pub fn configure_extraction(&mut self, scene: &str, interval: u32) -> Result<()> {
-        let _: Scene = self.get("scene", scene)?;
-        self.scheduler.configure(scene, interval)
+    pub fn configure_extraction(&mut self, conversation: &str, interval: u32) -> Result<()> {
+        let _: Conversation = self.get("conversation", conversation)?;
+        self.scheduler.configure(conversation, interval)
     }
-    pub fn extraction_status(&self, scene: &str) -> Result<Value> {
+    pub fn extraction_status(&self, conversation: &str) -> Result<Value> {
         let repair: bool = self
             .scheduler
             .db
-            .query_row("SELECT repair FROM runtime WHERE scene=?", [scene], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT repair FROM runtime WHERE scene=?",
+                [conversation],
+                |r| r.get(0),
+            )
             .optional()?
             .unwrap_or(false);
-        Ok(json!({"schedule":self.scheduler.status(scene)?,"repair_pending":repair}))
+        Ok(json!({"schedule":self.scheduler.status(conversation)?,"repair_pending":repair}))
     }
-    pub fn begin_extraction(&mut self, scene: &str, early: bool) -> Result<Option<Extraction>> {
-        let _: Scene = self.get("scene", scene)?;
+    pub fn begin_extraction(
+        &mut self,
+        conversation: &str,
+        early: bool,
+    ) -> Result<Option<Extraction>> {
+        let _: Conversation = self.get("conversation", conversation)?;
         let repair: bool = self
             .scheduler
             .db
-            .query_row("SELECT repair FROM runtime WHERE scene=?", [scene], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT repair FROM runtime WHERE scene=?",
+                [conversation],
+                |r| r.get(0),
+            )
             .optional()?
             .unwrap_or(false);
-        let revision = self.revision(scene)?;
+        let revision = self.revision(conversation)?;
         if repair {
-            let (affected_ids, evidence) = repair_evidence(&self.scheduler.db, scene)?;
+            let (affected_ids, evidence) = repair_evidence(&self.scheduler.db, conversation)?;
             return Ok(Some(Extraction {
-                scene_id: scene.into(),
+                conversation_id: conversation.into(),
                 revision,
                 batch_id: None,
                 repair: true,
@@ -277,7 +289,7 @@ impl Store {
                 evidence,
             }));
         }
-        let Some(batch) = self.scheduler.begin(scene, early)? else {
+        let Some(batch) = self.scheduler.begin(conversation, early)? else {
             return Ok(None);
         };
         let evidence = batch
@@ -293,7 +305,7 @@ impl Store {
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(Some(Extraction {
-            scene_id: scene.into(),
+            conversation_id: conversation.into(),
             revision,
             batch_id: Some(batch.id),
             repair: false,
@@ -326,12 +338,12 @@ impl Store {
             .db
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         if let Some(id) = job.batch_id {
-            let (scene, payload, result): (String, String, Option<String>) = tx.query_row(
+            let (conversation, payload, result): (String, String, Option<String>) = tx.query_row(
                 "SELECT scene,payload,result FROM batches WHERE id=?",
                 [id],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )?;
-            if scene != job.scene_id || result.is_some() {
+            if conversation != job.conversation_id || result.is_some() {
                 return Err(Error::Conflict("batch closed or scene differs"));
             }
             let frozen: Vec<Turn> = serde_json::from_str(&payload)?;
@@ -347,14 +359,14 @@ impl Store {
         }
         let current_revision: i64 = tx.query_row(
             "SELECT revision FROM runtime WHERE scene=?",
-            [&job.scene_id],
+            [&job.conversation_id],
             |r| r.get(0),
         )?;
         if job.repair && current_revision != job.revision {
             return Err(Error::Conflict("repair evidence changed; retry"));
         }
         if job.repair {
-            let (ids, expected) = repair_evidence(&tx, &job.scene_id)?;
+            let (ids, expected) = repair_evidence(&tx, &job.conversation_id)?;
             if ids != job.affected_ids
                 || serde_json::to_value(expected)? != serde_json::to_value(&job.evidence)?
             {
@@ -364,7 +376,7 @@ impl Store {
         for e in &job.evidence {
             let (revision, deleted): (i64, bool) = tx.query_row(
                 "SELECT revision,deleted FROM exchanges WHERE request=? AND scene=?",
-                params![e.request_id, job.scene_id],
+                params![e.request_id, job.conversation_id],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )?;
             if deleted || revision != e.revision {
@@ -373,14 +385,14 @@ impl Store {
         }
         let activity: i64 = tx.query_row(
             "SELECT activity FROM runtime WHERE scene=?",
-            [&job.scene_id],
+            [&job.conversation_id],
             |r| r.get(0),
         )?;
         if job.repair {
             for m in &patch.upsert {
                 let exists: bool = tx.query_row(
                     "SELECT EXISTS(SELECT 1 FROM memory WHERE scene=? AND id=? AND valid=1)",
-                    params![job.scene_id, m.id],
+                    params![job.conversation_id, m.id],
                     |r| r.get(0),
                 )?;
                 if exists {
@@ -392,24 +404,24 @@ impl Store {
             for id in &job.affected_ids {
                 tx.execute(
                     "DELETE FROM sources WHERE scene=? AND memory_id=?",
-                    params![job.scene_id, id],
+                    params![job.conversation_id, id],
                 )?;
                 tx.execute(
                     "DELETE FROM memory WHERE scene=? AND id=?",
-                    params![job.scene_id, id],
+                    params![job.conversation_id, id],
                 )?;
             }
         }
         for m in &patch.upsert {
-            tx.execute("INSERT INTO memory(scene,id,body,last_hit) VALUES (?,?,?,?) ON CONFLICT(scene,id) DO UPDATE SET body=excluded.body,valid=1,archived=0,last_hit=excluded.last_hit",params![job.scene_id,m.id,serde_json::to_string(m)?,activity])?;
+            tx.execute("INSERT INTO memory(scene,id,body,last_hit) VALUES (?,?,?,?) ON CONFLICT(scene,id) DO UPDATE SET body=excluded.body,valid=1,archived=0,last_hit=excluded.last_hit",params![job.conversation_id,m.id,serde_json::to_string(m)?,activity])?;
             tx.execute(
                 "DELETE FROM sources WHERE scene=? AND memory_id=?",
-                params![job.scene_id, m.id],
+                params![job.conversation_id, m.id],
             )?;
             for s in &m.sources {
                 tx.execute(
                     "INSERT INTO sources(scene,memory_id,request,revision) VALUES (?,?,?,?)",
-                    params![job.scene_id, m.id, s.request_id, s.revision],
+                    params![job.conversation_id, m.id, s.request_id, s.revision],
                 )?;
             }
         }
@@ -418,12 +430,12 @@ impl Store {
             && current_revision == job.revision
         {
             let body: String = tx.query_row(
-                "SELECT body FROM resources WHERE kind='scene' AND id=?",
-                [&job.scene_id],
+                "SELECT body FROM resources WHERE kind='conversation' AND id=?",
+                [&job.conversation_id],
                 |r| r.get(0),
             )?;
-            let mut scene: Scene = serde_json::from_str(&body)?;
-            scene.narrative = narrative.clone();
+            let mut conversation: Conversation = serde_json::from_str(&body)?;
+            conversation.narrative = narrative.clone();
             let sources: Vec<_> = job
                 .evidence
                 .iter()
@@ -432,17 +444,17 @@ impl Store {
                     revision: e.revision,
                 })
                 .collect();
-            tx.execute("INSERT INTO resources(kind,id,body) VALUES ('narrative_sources',?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body",params![job.scene_id,serde_json::to_string(&sources)?])?;
+            tx.execute("INSERT INTO resources(kind,id,body) VALUES ('narrative_sources',?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body",params![job.conversation_id,serde_json::to_string(&sources)?])?;
             tx.execute(
-                "UPDATE resources SET body=?,revision=revision+1 WHERE kind='scene' AND id=?",
-                params![serde_json::to_string(&scene)?, job.scene_id],
+                "UPDATE resources SET body=?,revision=revision+1 WHERE kind='conversation' AND id=?",
+                params![serde_json::to_string(&conversation)?, job.conversation_id],
             )?;
         }
         if let Some(id) = job.batch_id {
             for e in &job.evidence {
                 tx.execute(
                     "UPDATE turns SET done=1 WHERE scene=? AND request=?",
-                    params![job.scene_id, e.request_id],
+                    params![job.conversation_id, e.request_id],
                 )?;
             }
             tx.execute(
@@ -451,11 +463,14 @@ impl Store {
             )?;
         }
         if job.repair {
-            tx.execute("UPDATE runtime SET repair=0 WHERE scene=?", [&job.scene_id])?;
+            tx.execute(
+                "UPDATE runtime SET repair=0 WHERE scene=?",
+                [&job.conversation_id],
+            )?;
         }
         Self::event_tx(
             &tx,
-            &job.scene_id,
+            &job.conversation_id,
             if job.repair {
                 "memory.repaired"
             } else {
@@ -466,16 +481,17 @@ impl Store {
         tx.commit()?;
         Ok(())
     }
-    fn lifecycle_tx(tx: &rusqlite::Transaction<'_>, scene: &str) -> Result<()> {
-        let activity: i64 =
-            tx.query_row("SELECT activity FROM runtime WHERE scene=?", [scene], |r| {
-                r.get(0)
-            })?;
+    fn lifecycle_tx(tx: &rusqlite::Transaction<'_>, conversation: &str) -> Result<()> {
+        let activity: i64 = tx.query_row(
+            "SELECT activity FROM runtime WHERE scene=?",
+            [conversation],
+            |r| r.get(0),
+        )?;
         let rows = {
             let mut q = tx.prepare(
                 "SELECT id,body,last_hit,archived FROM memory WHERE scene=? AND valid=1",
             )?;
-            q.query_map([scene], |r| {
+            q.query_map([conversation], |r| {
                 Ok((
                     r.get::<_, String>(0)?,
                     r.get::<_, String>(1)?,
@@ -502,20 +518,20 @@ impl Store {
             if archived && age >= 240 && m.weight < 0.2 {
                 tx.execute(
                     "DELETE FROM sources WHERE scene=? AND memory_id=?",
-                    params![scene, id],
+                    params![conversation, id],
                 )?;
                 tx.execute(
                     "DELETE FROM memory WHERE scene=? AND id=?",
-                    params![scene, id],
+                    params![conversation, id],
                 )?;
-                Self::event_tx(tx, scene, "memory.forgotten", &json!({"id":id}))?;
+                Self::event_tx(tx, conversation, "memory.forgotten", &json!({"id":id}))?;
             } else {
                 tx.execute(
                     "UPDATE memory SET body=?,archived=? WHERE scene=? AND id=?",
                     params![
                         serde_json::to_string(&m)?,
                         archived || (m.kind == "event" && m.weight < 0.3),
-                        scene,
+                        conversation,
                         id
                     ],
                 )?;
@@ -523,27 +539,27 @@ impl Store {
         }
         Ok(())
     }
-    pub fn snapshot(&mut self, scene_id: &str, query: &str) -> Result<Snapshot> {
-        let scene: Scene = self.get("scene", scene_id)?;
-        let scope = if scene.injection_scope.is_empty() {
-            vec![scene_id.to_string()]
+    pub fn snapshot(&mut self, conversation_id: &str, query: &str) -> Result<Snapshot> {
+        let conversation: Conversation = self.get("conversation", conversation_id)?;
+        let scope = if conversation.injection_scope.is_empty() {
+            vec![conversation_id.to_string()]
         } else {
-            scene.injection_scope.clone()
+            conversation.injection_scope.clone()
         };
         let mut candidates = Vec::new();
         let mut scope_revisions = BTreeMap::new();
         let tokens = tokens(query);
-        for scene in &scope {
-            scope_revisions.insert(scene.clone(), self.revision(scene)?);
+        for conversation in &scope {
+            scope_revisions.insert(conversation.clone(), self.revision(conversation)?);
             let mut q = self.scheduler.db.prepare(
                 "SELECT body FROM memory WHERE scene=? AND valid=1 AND archived=0 ORDER BY id",
             )?;
-            for row in q.query_map([scene], |r| r.get::<_, String>(0))? {
+            for row in q.query_map([conversation], |r| r.get::<_, String>(0))? {
                 let m: Memory = serde_json::from_str(&row?)?;
                 let words = tokens_for(&m);
                 let overlap = tokens.intersection(&words).count();
                 let score = (overlap as f64) + m.weight + if m.core { 5.0 } else { 0.0 };
-                candidates.push((scene.clone(), m, score, overlap > 0));
+                candidates.push((conversation.clone(), m, score, overlap > 0));
             }
         }
         candidates.sort_by(|a, b| {
@@ -554,7 +570,7 @@ impl Store {
         let mut chosen = Vec::new();
         let mut seen = BTreeSet::new();
         let mut budget = 16_000usize;
-        for (scene, m, _, matches) in &candidates {
+        for (conversation, m, _, matches) in &candidates {
             if chosen.len() >= 20 {
                 break;
             }
@@ -562,18 +578,18 @@ impl Store {
                 continue;
             }
             budget -= m.body.len();
-            seen.insert((scene.clone(), m.id.clone()));
-            chosen.push((scene.clone(), m.clone()));
+            seen.insert((conversation.clone(), m.id.clone()));
+            chosen.push((conversation.clone(), m.clone()));
         }
         let direct = chosen.clone();
-        for (scene, m) in direct.iter().take(3) {
+        for (conversation, m) in direct.iter().take(3) {
             for link in m.links.iter().take(3) {
                 if chosen.len() >= 25 {
                     break;
                 }
                 if let Some((s, linked, _, _)) = candidates
                     .iter()
-                    .find(|(s, m, _, _)| s == scene && &m.id == link)
+                    .find(|(s, m, _, _)| s == conversation && &m.id == link)
                     && linked.body.len() <= budget
                     && seen.insert((s.clone(), linked.id.clone()))
                 {
@@ -583,13 +599,13 @@ impl Store {
             }
         }
         let memories: Vec<_> = chosen.iter().map(|(_, m)| m.clone()).collect();
-        let dimensions = project(&memories, &scene.narrative);
+        let dimensions = project(&memories, &conversation.narrative);
         let mut snapshot = Snapshot {
             id: id(),
-            scene_id: scene_id.into(),
-            revision: self.revision(scene_id)?,
+            conversation_id: conversation_id.into(),
+            revision: self.revision(conversation_id)?,
             scope_revisions,
-            narrative: scene.narrative,
+            narrative: conversation.narrative,
             dimensions,
             memories,
             context: String::new(),
@@ -597,32 +613,37 @@ impl Store {
         snapshot.context = format!(
             "[STATE_CONTEXT]\n{}\n[/STATE_CONTEXT]",
             serde_json::to_string(
-                &json!({"dimensions":snapshot.dimensions,"scene":snapshot.narrative,"memories":snapshot.memories})
+                &json!({"dimensions":snapshot.dimensions,"conversation":snapshot.narrative,"memories":snapshot.memories})
             )?
         );
         self.scheduler.db.execute(
             "INSERT INTO snapshots(id,scene,revision,body) VALUES (?,?,?,?)",
             params![
                 snapshot.id,
-                scene_id,
+                conversation_id,
                 snapshot.revision,
                 serde_json::to_string(&snapshot)?
             ],
         )?;
-        for (scene, m) in chosen.iter().take(5) {
-            self.scheduler.db.execute("UPDATE memory SET last_hit=(SELECT activity FROM runtime WHERE scene=?) WHERE scene=? AND id=?",params![scene,scene,m.id])?;
+        for (conversation, m) in chosen.iter().take(5) {
+            self.scheduler.db.execute("UPDATE memory SET last_hit=(SELECT activity FROM runtime WHERE scene=?) WHERE scene=? AND id=?",params![conversation,conversation,m.id])?;
         }
         Ok(snapshot)
     }
 }
-fn repair_evidence(db: &rusqlite::Connection, scene: &str) -> Result<(Vec<String>, Vec<Exchange>)> {
+fn repair_evidence(
+    db: &rusqlite::Connection,
+    conversation: &str,
+) -> Result<(Vec<String>, Vec<Exchange>)> {
     let mut q = db.prepare("SELECT id FROM memory WHERE scene=? AND valid=0 ORDER BY id")?;
     let ids = q
-        .query_map([scene], |r| r.get::<_, String>(0))?
+        .query_map([conversation], |r| r.get::<_, String>(0))?
         .collect::<std::result::Result<Vec<_>, _>>()?;
     let mut q=db.prepare("SELECT e.body FROM exchanges e WHERE e.scene=? AND e.deleted=0 AND (e.request IN (SELECT s.request FROM sources s JOIN memory m ON m.scene=s.scene AND m.id=s.memory_id WHERE m.scene=? AND m.valid=0) OR e.request IN (SELECT json_extract(j.value,'$.request_id') FROM resources r,json_each(r.body) j WHERE r.kind='narrative_sources' AND r.id=e.scene)) ORDER BY e.seq")?;
     let evidence = q
-        .query_map(params![scene, scene], |r| r.get::<_, String>(0))?
+        .query_map(params![conversation, conversation], |r| {
+            r.get::<_, String>(0)
+        })?
         .map(|r| Ok(serde_json::from_str(&r?)?))
         .collect::<Result<Vec<_>>>()?;
     Ok((ids, evidence))

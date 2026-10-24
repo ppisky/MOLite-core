@@ -25,7 +25,9 @@ impl Store {
         CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY,input TEXT NOT NULL,result TEXT);
         CREATE TABLE IF NOT EXISTS maintenance_requests(id TEXT PRIMARY KEY,body TEXT NOT NULL);")?;
         std::fs::create_dir_all(root.join("files"))?;
-        Ok(Self { scheduler, root })
+        let mut store = Self { scheduler, root };
+        store.upgrade_conversations()?;
+        Ok(store)
     }
     pub fn get<T: DeserializeOwned>(&self, kind: &str, id: &str) -> Result<T> {
         let body: Option<String> = self
@@ -125,9 +127,9 @@ impl Store {
         self.put("character", &c.id, &c)
     }
 
-    /// Classification never changes scene selection or memory provenance.
+    /// Classification never changes conversation selection or memory provenance.
     pub fn classify(&self, kind: &str, id: &str, classification: Classification) -> Result<()> {
-        if !["scene", "conversation", "character", "file"].contains(&kind) {
+        if !["conversation", "character", "file"].contains(&kind) {
             return Err(Error::Invalid("resource cannot be classified"));
         }
         if classification.tags.len() > 100
@@ -143,13 +145,14 @@ impl Store {
         value["classification"] = serde_json::to_value(classification)?;
         self.put(kind, id, &value)
     }
-    pub fn delete_scene(&mut self, id: &str, expected: i64) -> Result<()> {
-        let _: Scene = self.get("scene", id)?;
-        for value in self.list("scene")? {
-            let scene: Scene = serde_json::from_value(value)?;
-            if scene.id != id && scene.injection_scope.iter().any(|scope| scope == id) {
+    pub fn delete_conversation(&mut self, id: &str, expected: i64) -> Result<()> {
+        let _: Conversation = self.get("conversation", id)?;
+        for value in self.list("conversation")? {
+            let conversation: Conversation = serde_json::from_value(value)?;
+            if conversation.id != id && conversation.injection_scope.iter().any(|scope| scope == id)
+            {
                 return Err(Error::Conflict(
-                    "scene is referenced by an injection scope; switch that scope first",
+                    "conversation is referenced by an injection scope; switch that scope first",
                 ));
             }
         }
@@ -162,14 +165,16 @@ impl Store {
                 r.get(0)
             })?;
         if revision != expected {
-            return Err(Error::Conflict("scene revision changed"));
+            return Err(Error::Conflict("conversation revision changed"));
         }
         tx.execute(
-            "DELETE FROM requests WHERE id IN (SELECT request FROM exchanges WHERE scene=?)",
+            "DELETE FROM requests WHERE json_extract(input,'$.request.conversation_id')=?",
             [id],
         )?;
+        let prefix = format!("repair:{id}:");
+        tx.execute("DELETE FROM maintenance_requests WHERE id IN (SELECT 'batch:' || id FROM batches WHERE scene=?) OR substr(id,1,length(?))=?",params![id,prefix,prefix])?;
         tx.execute(
-            "DELETE FROM resources WHERE kind='conversation' AND json_extract(body,'$.scene_id')=?",
+            "DELETE FROM resources WHERE kind='narrative_sources' AND id=?",
             [id],
         )?;
         for table in [
@@ -184,9 +189,12 @@ impl Store {
             tx.execute(&format!("DELETE FROM {table} WHERE scene=?"), [id])?;
         }
         tx.execute("DELETE FROM scenes WHERE id=?", [id])?;
-        tx.execute("DELETE FROM resources WHERE kind='scene' AND id=?", [id])?;
         tx.execute(
-            "INSERT INTO events(scene,kind,body) VALUES (?,'scene.deleted','{}')",
+            "DELETE FROM resources WHERE kind='conversation' AND id=?",
+            [id],
+        )?;
+        tx.execute(
+            "INSERT INTO events(scene,kind,body) VALUES (?,'conversation.deleted','{}')",
             [id],
         )?;
         tx.commit()?;
@@ -203,10 +211,16 @@ impl Store {
             .execute("DELETE FROM resources WHERE kind='file' AND id=?", [id])?;
         Ok(())
     }
-    pub fn put_scene(&mut self, s: Scene, expected: Option<i64>) -> Result<()> {
-        for scope in &s.injection_scope {
-            if scope != &s.id {
-                let _: Scene = self.get("scene", scope)?;
+    pub fn put_conversation(&mut self, c: Conversation, expected: Option<i64>) -> Result<()> {
+        if c.id.trim().is_empty() || c.id.len() > 256 || c.title.trim().is_empty() {
+            return Err(Error::Invalid("invalid conversation"));
+        }
+        for id in &c.character_ids {
+            let _: Character = self.get("character", id)?;
+        }
+        for scope in &c.injection_scope {
+            if scope != &c.id {
+                let _: Conversation = self.get("conversation", scope)?;
             }
         }
         let tx = self
@@ -214,38 +228,23 @@ impl Store {
             .db
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let revision: i64 = tx
-            .query_row("SELECT revision FROM runtime WHERE scene=?", [&s.id], |r| {
+            .query_row("SELECT revision FROM runtime WHERE scene=?", [&c.id], |r| {
                 r.get(0)
             })
             .optional()?
             .unwrap_or(0);
         if expected.is_some_and(|e| e != revision) {
-            return Err(Error::Conflict("scene revision changed"));
+            return Err(Error::Conflict("conversation revision changed"));
         }
-        tx.execute("INSERT OR IGNORE INTO scenes(id) VALUES (?)", [&s.id])?;
-        tx.execute("INSERT INTO resources(kind,id,body) VALUES ('scene',?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body,revision=resources.revision+1",params![s.id,serde_json::to_string(&s)?])?;
+        tx.execute("INSERT OR IGNORE INTO scenes(id) VALUES (?)", [&c.id])?;
+        tx.execute("INSERT INTO resources(kind,id,body) VALUES ('conversation',?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body,revision=resources.revision+1",params![c.id,serde_json::to_string(&c)?])?;
         tx.execute(
             "DELETE FROM resources WHERE kind='narrative_sources' AND id=?",
-            [&s.id],
+            [&c.id],
         )?;
-        Self::event_tx(&tx, &s.id, "scene.updated", &json!({}))?;
+        Self::event_tx(&tx, &c.id, "conversation.updated", &json!({}))?;
         tx.commit()?;
         Ok(())
-    }
-    pub fn put_conversation(&self, c: Conversation) -> Result<()> {
-        let _: Scene = self.get("scene", &c.scene_id)?;
-        for id in &c.character_ids {
-            let _: Character = self.get("character", id)?;
-        }
-        if let Ok(old) = self.get::<Conversation>("conversation", &c.id)
-            && old.scene_id != c.scene_id
-            && !self.history(&c.id)?.is_empty()
-        {
-            return Err(Error::Conflict(
-                "cannot move nonempty conversation; change injection scope instead",
-            ));
-        }
-        self.put("conversation", &c.id, &c)
     }
     pub fn history(&self, conversation: &str) -> Result<Vec<Exchange>> {
         let mut q = self.scheduler.db.prepare(
@@ -255,26 +254,28 @@ impl Store {
             .map(|r| Ok(serde_json::from_str(&r?)?))
             .collect()
     }
-    pub fn revision(&self, scene: &str) -> Result<i64> {
+    pub fn revision(&self, conversation: &str) -> Result<i64> {
         Ok(self
             .scheduler
             .db
-            .query_row("SELECT revision FROM runtime WHERE scene=?", [scene], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT revision FROM runtime WHERE scene=?",
+                [conversation],
+                |r| r.get(0),
+            )
             .optional()?
             .unwrap_or(0))
     }
     pub(crate) fn event_tx(
         tx: &rusqlite::Transaction<'_>,
-        scene: &str,
+        conversation: &str,
         kind: &str,
         data: &Value,
     ) -> Result<()> {
-        tx.execute("INSERT INTO runtime(scene,revision) VALUES (?,1) ON CONFLICT(scene) DO UPDATE SET revision=revision+1",[scene])?;
+        tx.execute("INSERT INTO runtime(scene,revision) VALUES (?,1) ON CONFLICT(scene) DO UPDATE SET revision=revision+1",[conversation])?;
         tx.execute(
             "INSERT INTO events(scene,kind,body) VALUES (?,?,?)",
-            params![scene, kind, serde_json::to_string(data)?],
+            params![conversation, kind, serde_json::to_string(data)?],
         )?;
         Ok(())
     }
@@ -286,10 +287,10 @@ impl Store {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get::<_, String>(3)?))
         })?;
         rows.map(|r| {
-            let (sequence, scene_id, kind, body) = r?;
+            let (sequence, conversation_id, kind, body) = r?;
             Ok(Event {
                 sequence,
-                scene_id,
+                conversation_id,
                 kind,
                 data: serde_json::from_str(&body)?,
             })

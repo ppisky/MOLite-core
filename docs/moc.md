@@ -4,7 +4,7 @@ MOLite uses current MOC v3: tar + zstd, `manifest.toml`, declared modules, path 
 
 Characters live at `characters/spaces/00000000-0000-0000-0000-000000000001/<uuid>/character.toml` with Markdown payloads. This UUID is a wire-format namespace, not a personal Space or memory pool. An archive can carry multiple characters.
 
-Complete MOLite state uses the explicit module `id=molite-runtime`, `path=molite`, `dependencies=[characters]`, `import_order=60`. `molite/state.json` has `version=1`, a `files_included` flag and an allowlist of resource, scene, conversation, exchange, DMW, provenance, counter and batch tables. Attachments are stored as `molite/files/<sha256>`. Provider/model configuration, credentials and local request caches are excluded.
+Complete MOLite state uses the explicit module `id=molite-runtime`, `path=molite`, `dependencies=[characters]`, `import_order=60`. `molite/state.json` has `version=2`, a `files_included` flag and an allowlist of resource, conversation, exchange, DMW, provenance, counter and batch tables. Attachments are stored as `molite/files/<sha256>`. Provider/model configuration, prompt overrides, credentials and local request caches are excluded.
 
 Import validates a staging database before committing to the destination transaction. Identity conflicts reject the entire import; local sequence numbers are reassigned. `include_files=false` retains metadata and references and reports `files_included:false`; reads fail explicitly until missing attachments are restored. Content files are written before database commit: rollback may leave unreferenced content, since the filesystem and SQLite are not a single physical transaction.
 

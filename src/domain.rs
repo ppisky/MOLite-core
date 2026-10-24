@@ -102,27 +102,18 @@ pub struct Narrative {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Scene {
+pub struct Conversation {
     pub id: String,
     pub title: String,
-    /// Explicit scene IDs; empty means only this scene.
+    #[serde(default)]
+    pub character_ids: Vec<String>,
+    /// Explicit conversation IDs; empty selects this conversation only.
     #[serde(default)]
     pub injection_scope: Vec<String>,
     #[serde(default)]
     pub narrative: Narrative,
     #[serde(default)]
     pub ended: bool,
-    #[serde(default)]
-    pub classification: Classification,
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Conversation {
-    pub id: String,
-    pub scene_id: String,
-    #[serde(default)]
-    pub character_ids: Vec<String>,
-    pub title: String,
     #[serde(default)]
     pub classification: Classification,
 }
@@ -194,7 +185,6 @@ pub struct MemoryPatch {
 pub struct Exchange {
     pub request_id: String,
     pub conversation_id: String,
-    pub scene_id: String,
     pub revision: i64,
     pub user: String,
     pub assistant: String,
@@ -205,7 +195,7 @@ pub struct Exchange {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub sequence: i64,
-    pub scene_id: String,
+    pub conversation_id: String,
     pub kind: String,
     pub data: Value,
 }

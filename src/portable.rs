@@ -49,7 +49,7 @@ impl Store {
         let mut tables = BTreeMap::new();
         for (table, columns) in TABLES {
             let filter = if *table == "resources" {
-                " WHERE kind NOT IN ('provider','model','group','settings')"
+                " WHERE kind NOT IN ('provider','model','group','settings','prompt_space')"
             } else {
                 ""
             };
@@ -78,7 +78,7 @@ impl Store {
         fs::write(
             root.join("molite/state.json"),
             serde_json::to_vec(&Bundle {
-                version: 1,
+                version: 2,
                 files_included: include_files,
                 tables,
             })?,
@@ -221,7 +221,7 @@ impl Store {
         let bundle = root.join("molite/state.json");
         if bundle.exists() {
             let bundle: Bundle = serde_json::from_slice(&fs::read(bundle)?)?;
-            if bundle.version != 1 {
+            if bundle.version != 2 {
                 return Err(Error::Invalid("unsupported MOLite bundle version"));
             }
             let temp = tempfile::tempdir()?;
@@ -424,24 +424,58 @@ fn sql_value(v: &Value) -> Result<SqlValue> {
 }
 fn validate_bundle(s: &Store) -> Result<()> {
     let mut expected_sources = 0i64;
-    for kind in ["provider", "model", "group", "settings"] {
+    for kind in ["provider", "model", "group", "settings", "prompt_space"] {
         if !s.list(kind)?.is_empty() {
             return Err(Error::Invalid(
                 "MOC must not install provider configuration",
             ));
         }
     }
-    for v in s.list("scene")? {
-        let scene: Scene = serde_json::from_value(v)?;
+    let mut kinds = s
+        .scheduler
+        .db
+        .prepare("SELECT DISTINCT kind FROM resources")?;
+    for kind in kinds.query_map([], |r| r.get::<_, String>(0))? {
+        if !["conversation", "character", "file", "narrative_sources"].contains(&kind?.as_str()) {
+            return Err(Error::Invalid("unsupported MOC resource kind"));
+        }
+    }
+    for v in s.list("conversation")? {
+        let scene: Conversation = serde_json::from_value(v)?;
         for id in &scene.injection_scope {
-            let _: Scene = s.get("scene", id)?;
+            let _: Conversation = s.get("conversation", id)?;
         }
     }
     for v in s.list("conversation")? {
         let c: Conversation = serde_json::from_value(v)?;
-        let _: Scene = s.get("scene", &c.scene_id)?;
         for id in c.character_ids {
             let _: Character = s.get("character", &id)?;
+        }
+    }
+    let mut exchanges = s
+        .scheduler
+        .db
+        .prepare("SELECT request,conversation,scene,revision,body,deleted FROM exchanges")?;
+    for row in exchanges.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, i64>(3)?,
+            r.get::<_, String>(4)?,
+            r.get::<_, bool>(5)?,
+        ))
+    })? {
+        let (request, conversation, owner, revision, body, deleted) = row?;
+        let e: Exchange = serde_json::from_str(&body)?;
+        let _: Conversation = s.get("conversation", &conversation)?;
+        if owner != conversation
+            || e.conversation_id != conversation
+            || e.request_id != request
+            || e.revision != revision
+            || e.deleted != deleted
+        {
+            return Err(Error::Invalid("MOC exchange ownership mismatch"));
         }
     }
     for v in s.list("file")? {
@@ -466,7 +500,7 @@ fn validate_bundle(s: &Store) -> Result<()> {
         ))
     })? {
         let (scene, id, body, valid) = row?;
-        let _: Scene = s.get("scene", &scene)?;
+        let _: Conversation = s.get("conversation", &scene)?;
         let m: Memory = serde_json::from_str(&body)?;
         m.validate()?;
         if m.id != id {

@@ -2,7 +2,7 @@
 use crate::runtime::Engine;
 use axum::{
     Json, Router,
-    extract::{DefaultBodyLimit, State},
+    extract::{DefaultBodyLimit, Path, State},
     http::{HeaderMap, StatusCode},
     response::{
         IntoResponse, Response,
@@ -22,6 +22,11 @@ pub fn router(engine: Engine, token: Option<String>) -> Router {
         .route(
             "/health",
             get(|| async { Json(json!({"status":"ok","api_version":1})) }),
+        )
+        .route("/v1/prompt-spaces", get(prompt_list))
+        .route(
+            "/v1/prompt-spaces/{id}",
+            get(prompt_get).put(prompt_replace).delete(prompt_reset),
         )
         .route("/v1/operations", post(operation))
         .route("/v1/stream", post(stream))
@@ -95,4 +100,38 @@ async fn stream(
     Sse::new(events)
         .keep_alive(KeepAlive::default())
         .into_response()
+}
+
+async fn prompt_list(State(s): State<HttpState>, h: HeaderMap) -> Response {
+    operation(State(s), h, Json(json!({"op":"prompt_spaces.list"}))).await
+}
+async fn prompt_get(State(s): State<HttpState>, Path(id): Path<String>, h: HeaderMap) -> Response {
+    operation(State(s), h, Json(json!({"op":"prompt_spaces.get","id":id}))).await
+}
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PromptReplacement {
+    content: String,
+    #[serde(default)]
+    revision: Option<String>,
+}
+async fn prompt_replace(
+    State(s): State<HttpState>,
+    Path(id): Path<String>,
+    h: HeaderMap,
+    Json(body): Json<PromptReplacement>,
+) -> Response {
+    operation(State(s), h, Json(json!({"op":"prompt_spaces.replace","id":id,"content":body.content,"revision":body.revision}))).await
+}
+async fn prompt_reset(
+    State(s): State<HttpState>,
+    Path(id): Path<String>,
+    h: HeaderMap,
+) -> Response {
+    operation(
+        State(s),
+        h,
+        Json(json!({"op":"prompt_spaces.reset","id":id})),
+    )
+    .await
 }

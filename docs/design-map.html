@@ -60,7 +60,7 @@
       <details class="branch changed" data-branch="memory" open>
         <summary class="cursor-interaction"><span class="kind">调整</span><span class="branch-title">记忆范围与分类</span></summary>
         <ul class="leaves">
-          <li>记忆只向指定场景范围注入</li>
+          <li>记忆只向指定对话范围注入</li>
           <li>需要延续记忆时，自己切换范围</li>
           <li>没有角色级记忆池或自动共享</li>
           <li>文件夹、标签负责分类<span class="leaf-detail text-small">分类不改变记忆注入范围</span></li>
@@ -70,7 +70,7 @@
       <details class="branch" data-branch="files" open>
         <summary class="cursor-interaction"><span class="kind">保留</span><span class="branch-title">原生 MOC 与数据文件</span></summary>
         <ul class="leaves">
-          <li>只使用原生 MOC<span class="leaf-detail text-small">沿用角色、会话、记忆等携带能力</span></li>
+          <li>只使用原生 MOC<span class="leaf-detail text-small">沿用角色、对话、记忆等携带能力</span></li>
           <li>TXT、PNG、PDF 等独立存储</li>
           <li>数据文件通常随 MOC 携带<span class="leaf-detail text-small">也可以明确选择不携带</span></li>
           <li>原版加密能力保留</li>
@@ -105,6 +105,7 @@
           <li>再建立模型参数组<span class="leaf-detail text-small">选择模型、请求方式、具体请求参数</span></li>
           <li>三个用途分别选择组<div class="sequence"><span class="step">对话</span><span class="step">记忆</span><span class="step">视觉回退</span></div></li>
           <li>对话模型能看图 → 直接看原图<span class="leaf-detail text-small">只能读文本 → 视觉回退描述后再对话</span></li>
+          <li>四个提示词空间<span class="leaf-detail text-small">助手 · 角色扮演指导 · 记忆提炼 · 视觉回退；支持替换及恢复默认</span></li>
           <li>保留三种模型接口<span class="leaf-detail text-small">Chat Completions · Responses · Anthropic Messages</span></li>
         </ul>
       </details>
@@ -118,10 +119,10 @@
         </ul>
       </details>
 
-      <details class="branch pending" data-branch="pending">
-        <summary class="cursor-interaction"><span class="kind">待细化</span><span class="branch-title">工程契约与术语</span></summary>
+      <details class="branch changed" data-branch="pending">
+        <summary class="cursor-interaction"><span class="kind">已明确</span><span class="branch-title">工程契约与术语</span></summary>
         <ul class="leaves">
-          <li>场景、会话的最终命名与映射<span class="leaf-detail text-small">已经理解区别，尚未强制统一命名</span></li>
+          <li>统一使用对话<span class="leaf-detail text-small">直接创建，包含消息、叙事状态与记忆</span></li>
           <li>存储布局、MOC 数据映射</li>
           <li>文件限额、上下文预算</li>
           <li>接口契约、平台和性能指标</li>

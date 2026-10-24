@@ -4,7 +4,7 @@
 int main(int argc,char **argv){
  if(argc!=2)return 10;
  molite_engine engine=0;molite_task task=0;
- const char *request="{\"version\":1,\"op\":\"resource.list\",\"kind\":\"scene\"}";
+ const char *request="{\"version\":1,\"op\":\"resource.list\",\"kind\":\"conversation\"}";
  if(molite_abi_version()!=1)return 11;
  if(molite_open((const uint8_t*)argv[1],strlen(argv[1]),&engine)!=MOLITE_OK)return 12;
  if(molite_submit(engine,(const uint8_t*)request,strlen(request),&task)!=MOLITE_OK)return 13;

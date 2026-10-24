@@ -2,9 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-A small Rust core for character conversations with scene-scoped DMW v2 / MO State v2 memory. MOLite follows MOMO Core's provider → model → model parameter group → purpose → scene → conversation workflow, with one focused configuration and current-format support.
+A small Rust core for character conversations with conversation-scoped DMW v2 / MO State v2 memory. MOLite follows MOMO Core's provider → model → model parameter group → purpose → conversation workflow, with one focused configuration and current-format support.
 
-There are no personal Spaces, character-owned or implicit shared memory pools, NSG, vector databases, foreign character-card formats, image carriers, or LSB carriers. Folders and tags classify resources; explicitly selected scene scopes control memory injection.
+There are no personal Spaces, character-owned or implicit shared memory pools, NSG, vector databases, foreign character-card formats, image carriers, or LSB carriers. Folders and tags classify resources; explicitly selected conversation scopes control memory injection.
 
 ## Quick start
 
@@ -14,7 +14,7 @@ Install the Rust version in `rust-toolchain.toml` and a native C/C++ toolchain (
 cargo run --release --locked --bin molite-server
 ```
 
-The server listens on `127.0.0.1:3791` and stores data in `data/`. Set `MOLITE_DATA`, `MOLITE_LISTEN`, and optionally `MOLITE_HTTP_TOKEN`. A non-loopback listener requires a token. Configure your provider, models, parameter groups and purposes before creating a scene and conversation. API credentials are read from named environment variables, never exported with MOC.
+The server listens on `127.0.0.1:3791` and stores data in `data/`. Set `MOLITE_DATA`, `MOLITE_LISTEN`, and optionally `MOLITE_HTTP_TOKEN`. A non-loopback listener requires a token. Create a conversation directly; configure your provider, models, parameter groups and purposes before generating replies. API credentials are read from named environment variables, never exported with MOC.
 
 See the [API guide](docs/api.md), [native MOC format](docs/moc.md), and [C ABI guide](docs/c-abi.md). [Chinese guides](README.zh-CN.md) are also available.
 
@@ -22,9 +22,10 @@ See the [API guide](docs/api.md), [native MOC format](docs/moc.md), and [C ABI g
 
 - Three provider protocols: Chat Completions, Responses and Anthropic Messages. Parameter groups choose the request protocol, streaming preference, timeout and native request parameters.
 - Text and vision model configuration; direct image input for vision models or image-to-text fallback for text-only models.
-- Scene-scoped DMW evidence, five-dimensional state snapshots and source revisions. Editing, deleting or regenerating an exchange invalidates affected memory and schedules repair.
+- Conversation-scoped DMW evidence, five-dimensional state snapshots and source revisions. Editing, deleting or regenerating an exchange invalidates affected memory and schedules repair.
 - Extraction defaults to 12 completed rounds; configure 1–200 rounds or trigger early extraction. Successful early extraction restarts the cadence; repair does not add rounds.
-- Native MOC v3 character import and MOLite state roundtrips, optional data files and password encryption. Only current format versions are accepted; no historical migration layer.
+- Four editable prompt spaces with built-in defaults, persistent overrides and reset: assistant, roleplay director, memory distillation and vision fallback.
+- Native MOC v3 character import and MOLite state roundtrips, optional data files and password encryption. Only current archive formats are accepted; local databases support the documented one-to-one ownership upgrade.
 - Rust API, HTTP/SSE and a standard C ABI. The core produces `rlib`, `cdylib` and `staticlib` artifacts.
 
 ## Build and validate

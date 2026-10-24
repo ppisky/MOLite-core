@@ -1,4 +1,4 @@
-//! MOLite Core: scene-scoped DMW / MO State, native MOC, and three host interfaces.
+//! MOLite Core: conversation-scoped DMW / MO State, native MOC, and three host interfaces.
 //! Use [`runtime::Engine`] for orchestration or [`store::Store`] for typed local
 //! operations. [`Scheduler`] remains available as a standalone durable scheduler.
 use rusqlite::{Connection, OptionalExtension, params};
@@ -16,8 +16,10 @@ pub mod memory;
 pub mod moc;
 pub mod model;
 pub mod portable;
+pub mod prompt_spaces;
 pub mod runtime;
 pub mod store;
+mod upgrade;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -47,7 +49,7 @@ pub struct Turn {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Batch {
     pub id: i64,
-    pub scene_id: String,
+    pub conversation_id: String,
     pub early: bool,
     pub turns: Vec<Turn>,
 }
@@ -81,38 +83,41 @@ impl Scheduler {
     }
 
     /// Changes the threshold for future batches, without rewriting staged work.
-    pub fn configure(&mut self, scene: &str, every_turns: u32) -> Result<()> {
-        if scene.trim().is_empty() || !(1..=200).contains(&every_turns) {
+    pub fn configure(&mut self, conversation: &str, every_turns: u32) -> Result<()> {
+        if conversation.trim().is_empty() || !(1..=200).contains(&every_turns) {
             return Err(Error::Invalid(
-                "scene must be nonempty and interval within 1..=200",
+                "conversation must be nonempty and interval within 1..=200",
             ));
         }
         self.db.execute(
             "INSERT INTO scenes(id,every_turns) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET every_turns=excluded.every_turns",
-            params![scene, every_turns],
+            params![conversation, every_turns],
         )?;
         Ok(())
     }
 
     /// Records one successfully committed complete exchange. Replays do not count.
-    pub fn record(&mut self, scene: &str, turn: &Turn) -> Result<()> {
-        if scene.trim().is_empty()
+    pub fn record(&mut self, conversation: &str, turn: &Turn) -> Result<()> {
+        if conversation.trim().is_empty()
             || turn.request_id.trim().is_empty()
             || turn.assistant.trim().is_empty()
         {
             return Err(Error::Invalid(
-                "scene, request ID and assistant response are required",
+                "conversation, request ID and assistant response are required",
             ));
         }
         let body = serde_json::to_string(turn)?;
         let tx = self
             .db
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-        tx.execute("INSERT OR IGNORE INTO scenes(id) VALUES (?)", [scene])?;
+        tx.execute(
+            "INSERT OR IGNORE INTO scenes(id) VALUES (?)",
+            [conversation],
+        )?;
         let old: Option<String> = tx
             .query_row(
                 "SELECT body FROM turns WHERE scene=? AND request=?",
-                params![scene, turn.request_id],
+                params![conversation, turn.request_id],
                 |r| r.get(0),
             )
             .optional()?;
@@ -123,7 +128,7 @@ impl Scheduler {
         } else {
             tx.execute(
                 "INSERT INTO turns(scene,request,body) VALUES (?,?,?)",
-                params![scene, turn.request_id, body],
+                params![conversation, turn.request_id, body],
             )?;
         }
         tx.commit()?;
@@ -133,29 +138,31 @@ impl Scheduler {
     /// `early=true` captures the current pending tail (up to the configured batch
     /// size). Turns arriving during a model call remain pending for the next cycle.
     /// Existing failed/interrupted batches always resume with the original inputs.
-    pub fn begin(&mut self, scene: &str, early: bool) -> Result<Option<Batch>> {
+    pub fn begin(&mut self, conversation: &str, early: bool) -> Result<Option<Batch>> {
         let tx = self
             .db
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
         let active: Option<(i64, bool, String)> = tx
             .query_row(
                 "SELECT id,early,payload FROM batches WHERE scene=? AND result IS NULL",
-                [scene],
+                [conversation],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()?;
         if let Some((id, early, payload)) = active {
             return Ok(Some(Batch {
                 id,
-                scene_id: scene.into(),
+                conversation_id: conversation.into(),
                 early,
                 turns: serde_json::from_str(&payload)?,
             }));
         }
         let interval: Option<u32> = tx
-            .query_row("SELECT every_turns FROM scenes WHERE id=?", [scene], |r| {
-                r.get(0)
-            })
+            .query_row(
+                "SELECT every_turns FROM scenes WHERE id=?",
+                [conversation],
+                |r| r.get(0),
+            )
             .optional()?;
         let Some(interval) = interval else {
             return Ok(None);
@@ -164,7 +171,7 @@ impl Scheduler {
             let mut query =
                 tx.prepare("SELECT body FROM turns WHERE scene=? AND done=0 ORDER BY seq LIMIT ?")?;
             query
-                .query_map(params![scene, interval], |r| r.get::<_, String>(0))?
+                .query_map(params![conversation, interval], |r| r.get::<_, String>(0))?
                 .collect::<std::result::Result<Vec<_>, _>>()?
         };
         if bodies.is_empty() || (!early && bodies.len() < interval as usize) {
@@ -176,11 +183,11 @@ impl Scheduler {
             .collect::<std::result::Result<_, _>>()?;
         tx.execute(
             "INSERT INTO batches(scene,early,payload) VALUES (?,?,?)",
-            params![scene, early, serde_json::to_string(&turns)?],
+            params![conversation, early, serde_json::to_string(&turns)?],
         )?;
         let batch = Batch {
             id: tx.last_insert_rowid(),
-            scene_id: scene.into(),
+            conversation_id: conversation.into(),
             early,
             turns,
         };
@@ -201,10 +208,10 @@ impl Scheduler {
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
             )
             .optional()?;
-        let Some((scene, early, payload, result)) = stored else {
+        let Some((conversation, early, payload, result)) = stored else {
             return Err(Error::Conflict("unknown batch"));
         };
-        if scene != batch.scene_id
+        if conversation != batch.conversation_id
             || early != batch.early
             || serde_json::from_str::<Vec<Turn>>(&payload)? != batch.turns
         {
@@ -221,7 +228,7 @@ impl Scheduler {
         for turn in &batch.turns {
             tx.execute(
                 "UPDATE turns SET done=1 WHERE scene=? AND request=?",
-                params![scene, turn.request_id],
+                params![conversation, turn.request_id],
             )?;
         }
         tx.execute(
@@ -232,24 +239,26 @@ impl Scheduler {
         Ok(())
     }
 
-    pub fn status(&self, scene: &str) -> Result<Status> {
+    pub fn status(&self, conversation: &str) -> Result<Status> {
         let every_turns = self
             .db
-            .query_row("SELECT every_turns FROM scenes WHERE id=?", [scene], |r| {
-                r.get::<_, u32>(0)
-            })
+            .query_row(
+                "SELECT every_turns FROM scenes WHERE id=?",
+                [conversation],
+                |r| r.get::<_, u32>(0),
+            )
             .optional()?
             .unwrap_or(12);
         let pending_turns = self.db.query_row(
             "SELECT COUNT(*) FROM turns WHERE scene=? AND done=0",
-            [scene],
+            [conversation],
             |r| r.get::<_, u32>(0),
         )?;
         let active_batch_id = self
             .db
             .query_row(
                 "SELECT id FROM batches WHERE scene=? AND result IS NULL",
-                [scene],
+                [conversation],
                 |r| r.get(0),
             )
             .optional()?;

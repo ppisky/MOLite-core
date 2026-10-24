@@ -87,13 +87,7 @@ async fn setup(
     }
     e.execute(json!({"op":"purposes.set","value":{"conversation":"chat","memory":"memory","vision_fallback":"vision"}}),None).await.unwrap();
     e.execute(
-        json!({"op":"scene.put","value":{"id":"s","title":"room"}}),
-        None,
-    )
-    .await
-    .unwrap();
-    e.execute(
-        json!({"op":"conversation.put","value":{"id":"c","scene_id":"s","title":"chat"}}),
+        json!({"op":"conversation.put","value":{"id":"c","title":"chat"}}),
         None,
     )
     .await
@@ -109,7 +103,7 @@ async fn all_protocols_stream_commit_and_extract_with_replay() {
     ] {
         let (_d, e, mock, server) = setup(p, false).await;
         e.execute(
-            json!({"op":"extraction.configure","scene_id":"s","every_turns":1}),
+            json!({"op":"extraction.configure","conversation_id":"c","every_turns":1}),
             None,
         )
         .await
@@ -127,7 +121,10 @@ async fn all_protocols_stream_commit_and_extract_with_replay() {
         }
         assert!(emitted.iter().any(|v| v["type"] == "text.delta"));
         let status = e
-            .execute(json!({"op":"extraction.status","scene_id":"s"}), None)
+            .execute(
+                json!({"op":"extraction.status","conversation_id":"c"}),
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(status["schedule"]["pending_turns"], 0);
@@ -179,7 +176,10 @@ async fn regeneration_and_explicit_group_stream_do_not_add_turns() {
         .unwrap();
     assert_eq!(regenerated["exchange"]["revision"], 2);
     let status = e
-        .execute(json!({"op":"extraction.status","scene_id":"s"}), None)
+        .execute(
+            json!({"op":"extraction.status","conversation_id":"c"}),
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(status["schedule"]["pending_turns"], 1);
@@ -232,7 +232,7 @@ async fn http_uses_shared_operations_and_checks_token() {
     });
     let client = reqwest::Client::new();
     let url = format!("http://{address}/v1/operations");
-    let body = json!({"op":"resource.list","kind":"scene"});
+    let body = json!({"op":"resource.list","kind":"conversation"});
     assert_eq!(
         client.post(&url).json(&body).send().await.unwrap().status(),
         401
@@ -247,10 +247,133 @@ async fn http_uses_shared_operations_and_checks_token() {
         .json()
         .await
         .unwrap();
-    assert_eq!(result[0]["id"], "s");
+    assert_eq!(result[0]["id"], "c");
     let stream=client.post(format!("http://{address}/v1/stream")).bearer_auth("test-token").json(&json!({"op":"chat","request":{"request_id":"http","conversation_id":"c","text":"hello"}})).send().await.unwrap().text().await.unwrap();
     assert!(stream.contains("event: text.delta"));
     assert!(stream.contains("event: completed"));
     server.abort();
     provider.abort();
+}
+
+#[tokio::test]
+async fn prompt_overrides_reach_models_and_failed_requests_keep_captured_prompts() {
+    let (_d, e, mock, server) = setup(Protocol::ChatCompletions, false).await;
+    for (id, content) in [
+        ("assistant", "custom assistant"),
+        ("roleplay_director", "custom director"),
+        ("vision_fallback", "custom vision"),
+        ("memory_distillation", "custom extraction"),
+    ] {
+        e.execute(
+            json!({"op":"prompt_spaces.replace","id":id,"content":content}),
+            None,
+        )
+        .await
+        .unwrap();
+    }
+    e.execute(
+        json!({"op":"extraction.configure","conversation_id":"c","every_turns":1}),
+        None,
+    )
+    .await
+    .unwrap();
+    let f = e
+        .execute(
+            json!({"op":"file.add","name":"x.png","mime":"image/png","base64":"aA=="}),
+            None,
+        )
+        .await
+        .unwrap();
+    e.execute(json!({"op":"chat","request":{"request_id":"first","conversation_id":"c","text":"look","attachments":[f["id"]]}}),None).await.unwrap();
+    {
+        let calls = mock.calls.lock().unwrap();
+        for (model, prompt) in [
+            ("vision", "custom vision"),
+            ("memory", "custom extraction"),
+            ("chat", "custom assistant"),
+        ] {
+            assert!(
+                calls.iter().any(|c| c["model"] == model
+                    && c["messages"][0]["content"][0]["text"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains(prompt)),
+                "{model} missed its prompt"
+            );
+        }
+        assert!(calls.iter().any(|c| {
+            c["model"] == "chat"
+                && c["messages"][0]["content"][0]["text"]
+                    .as_str()
+                    .unwrap()
+                    .contains("custom director")
+        }));
+    }
+    e.execute(
+        json!({"op":"model.put","value":{"id":"broken","provider_id":"p","model":"broken"}}),
+        None,
+    )
+    .await
+    .unwrap();
+    e.execute(json!({"op":"group.put","value":{"id":"chat","model_id":"broken","protocol":"chat_completions"}}),None).await.unwrap();
+    let request =
+        json!({"op":"chat","request":{"request_id":"retry","conversation_id":"c","text":"hi"}});
+    assert!(e.execute(request.clone(), None).await.is_err());
+    e.execute(
+        json!({"op":"prompt_spaces.replace","id":"assistant","content":"new assistant"}),
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(e.execute(request, None).await.is_err());
+    {
+        let calls = mock.calls.lock().unwrap();
+        let retry = calls.iter().rev().find(|c| c["model"] == "broken").unwrap();
+        let system = retry["messages"][0]["content"][0]["text"].as_str().unwrap();
+        assert!(system.contains("custom assistant"));
+        assert!(!system.contains("new assistant"));
+    }
+    server.abort();
+}
+
+#[tokio::test]
+async fn memory_retry_retains_the_captured_prompt_and_model_group() {
+    let (_d, e, mock, server) = setup(Protocol::ChatCompletions, false).await;
+    e.execute(
+        json!({"op":"model.put","value":{"id":"broken","provider_id":"p","model":"broken"}}),
+        None,
+    )
+    .await
+    .unwrap();
+    e.execute(json!({"op":"group.put","value":{"id":"memory","model_id":"broken","protocol":"chat_completions"}}),None).await.unwrap();
+    e.execute(json!({"op":"prompt_spaces.replace","id":"memory_distillation","content":"captured memory prompt"}),None).await.unwrap();
+    e.execute(
+        json!({"op":"extraction.configure","conversation_id":"c","every_turns":1}),
+        None,
+    )
+    .await
+    .unwrap();
+    e.execute(
+        json!({"op":"chat","request":{"request_id":"q","conversation_id":"c","text":"hello"}}),
+        None,
+    )
+    .await
+    .unwrap();
+    e.execute(json!({"op":"prompt_spaces.replace","id":"memory_distillation","content":"new memory prompt"}),None).await.unwrap();
+    e.execute(json!({"op":"group.put","value":{"id":"memory","model_id":"memory","protocol":"chat_completions"}}),None).await.unwrap();
+    assert!(
+        e.execute(json!({"op":"distill","conversation_id":"c"}), None)
+            .await
+            .is_err()
+    );
+    {
+        let calls = mock.calls.lock().unwrap();
+        let last = calls.last().unwrap();
+        assert_eq!(last["model"], "broken");
+        assert_eq!(
+            last["messages"][0]["content"][0]["text"],
+            "captured memory prompt"
+        );
+    }
+    server.abort();
 }
