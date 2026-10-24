@@ -92,6 +92,15 @@ async fn setup(
     )
     .await
     .unwrap();
+    assert_eq!(
+        e.execute(
+            json!({"op":"resource.get","kind":"settings","id":"purposes"}),
+            None
+        )
+        .await
+        .unwrap()["conversation"],
+        "chat"
+    );
     (d, e, mock, server)
 }
 #[tokio::test]

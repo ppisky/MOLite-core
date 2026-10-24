@@ -696,6 +696,9 @@ impl Engine {
 }
 fn resource_kind(v: &Value) -> Result<&str> {
     let kind = field(v, "kind")?;
+    if kind == "settings" && v["op"] == "resource.get" && v["id"] == "purposes" {
+        return Ok(kind);
+    }
     if ![
         "conversation",
         "character",
