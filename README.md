@@ -39,6 +39,17 @@ cargo build --release --locked
 
 CI builds Linux x64, macOS ARM64 and Windows x64, tests the C host and runtime adapters, and publishes build artifacts. Tags named `v<Cargo version>` publish release packages after all checks pass. See [contributing](CONTRIBUTING.md) for development and release instructions.
 
+Bash entry points (Linux/macOS; Git Bash on Windows):
+
+```bash
+bash scripts/build.sh
+bash scripts/check.sh
+bash scripts/measure-size.sh
+bash scripts/package-release.sh linux-x86_64  # use macos-aarch64 or windows-x86_64 on those hosts
+```
+
+The scripts use Python 3; set `PYTHON=python` if your executable is named `python`. `package-release.sh` packages an already-built and verified release. On Windows, `bash scripts/pack-upx.sh` invokes the pinned Windows UPX pipeline from Git Bash; native Linux/macOS UPX packaging is not validated. The `.ps1` scripts remain available for PowerShell users.
+
 Release builds use `opt-level="z"` and full LTO, retaining rustls, AWS-LC, HTTP/2 and system proxy support. SQLite is bundled with unused extensions disabled by [.cargo/config.toml](.cargo/config.toml). **When embedding MOLite as a Rust dependency, copy `LIBSQLITE3_FLAGS` to the host workspace configuration:** Cargo does not inherit configuration from dependency directories. An existing environment variable overrides the repository default. SQLite tests verify the actual compiled options.
 
 Only required dependency features are enabled. zstd retains the standard current wire format and fast decode paths, without legacy decoding or dictionary training. tar excludes filesystem extended attributes; model JSON/SSE uses UTF-8. On Windows, `powershell -File scripts/pack-upx.ps1` builds separate copies with UPX `--ultra-brute` and verifies them; original binaries remain in `target/release/`. Packing requires Python 3 and MSVC Build Tools. Sign binaries after packing. See [measurements](docs/size-audit-upx-2026-10-24.json).

@@ -54,3 +54,16 @@ Windows 输出位于 `target/release/`：`molite-server.exe`、`molite_core.dll`
 Windows x64 可运行 `powershell -File scripts/pack-upx.ps1`，下载固定版本 UPX 5.2.1（校验下载包 SHA-256），以 `--ultra-brute` 搜索最高压缩率。原始 `target/release/` 文件保留，压缩副本位于独立的 `target/upx-时间戳/`。脚本验证压缩完整性、PE 加载属性、DLL C ABI、加密 MOC/文件往返和 HTTP/SSE，并运行真实 C 宿主；需要 Python 3 和 MSVC Build Tools。验证失败则报错，不把副本视为已验证产物。此步骤适用于未签名产物，代码签名应在压缩后完成。
 
 设计与实现差异以本 README、API 及 [实施记录](docs/implementation-plan.zh-CN.md) 为准；[设计草案](docs/design.zh-CN.md) 保留目标范围。复用来源和许可证见 [NOTICE](NOTICE)、[LICENSE](LICENSE)。公开仓库为 https://github.com/ppisky/MOLite-core 。英文入口、贡献与发布流程见 README.md 和 CONTRIBUTING.md。
+
+## Bash 入口
+
+Linux/macOS 与 Windows Git Bash 可使用：
+
+```bash
+bash scripts/build.sh
+bash scripts/check.sh
+bash scripts/measure-size.sh
+bash scripts/package-release.sh linux-x86_64
+```
+
+`package-release.sh` 用于已构建并验证的产物；平台标签应按宿主选择 `linux-x86_64`、`macos-aarch64` 或 `windows-x86_64`。脚本需要 Python 3，命令名为 python 时设置 `PYTHON=python`。Windows Git Bash 还可运行 `bash scripts/pack-upx.sh`，它调用已有的 Windows 最高 UPX 压缩及验证流程；尚未验证 Linux/macOS UPX 发布。PowerShell 用户仍可使用 `.ps1`。

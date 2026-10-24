@@ -9,3 +9,5 @@ Before submitting, run `cargo fmt --check`, `cargo clippy --locked --all-targets
 The release profile and SQLite compile flags are part of the supported build. Do not change them only in CI. Keep Cargo.lock tracked. Windows UPX packing is a post-build step that preserves original files.
 
 To release, update Cargo.toml and Cargo.lock, merge with passing CI, then push a matching `v<VERSION>` tag (for example `v0.1.0`). The workflow checks the tag, builds and verifies three platform archives, includes license texts, creates SHA256SUMS and publishes a GitHub Release. Windows includes a separate verified UPX archive. This does not publish to crates.io. Workflow runs can also be started manually without creating a release.
+
+Bash users can run `bash scripts/check.sh` for the local validation sequence. `build.sh`, `measure-size.sh` and `package-release.sh` provide build, measurement and packaging entry points. Dependency updates are grouped into at most one Cargo and one GitHub Actions PR; nothing is auto-merged. Main has basic force-push/deletion protection.
