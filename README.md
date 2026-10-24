@@ -49,4 +49,6 @@ Windows 输出位于 `target/release/`：`molite-server.exe`、`molite_core.dll`
 
 运行 `powershell -File scripts/measure-size.ps1` 可按当前唯一发布配置构建并记录体积；历史实验数据保存在 `docs/size-audit-*.json`，不是受支持的发布变体。
 
+Windows x64 可运行 `powershell -File scripts/pack-upx.ps1`，下载固定版本 UPX 5.2.1（校验下载包 SHA-256），以 `--ultra-brute` 搜索最高压缩率。原始 `target/release/` 文件保留，压缩副本位于独立的 `target/upx-时间戳/`。脚本验证压缩完整性、PE 加载属性、DLL C ABI、加密 MOC/文件往返和 HTTP/SSE，并运行真实 C 宿主；需要 Python 3 和 MSVC Build Tools。验证失败则报错，不把副本视为已验证产物。此步骤适用于未签名产物，代码签名应在压缩后完成。
+
 设计与实现差异以本 README、API 及 [实施记录](docs/implementation-plan.zh-CN.md) 为准；[设计草案](docs/design.zh-CN.md) 保留目标范围。复用来源和许可证见 [NOTICE](NOTICE)、[LICENSE](LICENSE)。Git 记录仅在本地。

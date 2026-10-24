@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-24",
+  "source_commit": "bea5268",
+  "platform": "Windows x64 MSVC",
+  "upx_version": "5.2.1",
+  "upx_source": "https://github.com/upx/upx/releases/tag/v5.2.1",
+  "archive_sha256": "eabc6792a347d45e945be7748423e7868fd01b0d2bcaa2f4b1031fd71ff69bda",
+  "arguments": [
+    "--ultra-brute",
+    "--no-progress"
+  ],
+  "production_binaries_overwritten": false,
+  "results": [
+    {
+      "file": "molite_core.dll",
+      "original_bytes": 6755328,
+      "packed_bytes": 2011136,
+      "packed_mib": 1.91796875,
+      "reduction_percent": 70.22889192056996,
+      "original_sha256": "ad8b6016b3e439f6a3eff7554f32792fe93f5e20acdfcf257e3659614ea0c8c5",
+      "packed_sha256": "5292dfc9cf3ee5899bf4eadc41cee9b7db33f9d0265cf1fe5f8b918e6757ccd2"
+    },
+    {
+      "file": "molite-server.exe",
+      "original_bytes": 6347264,
+      "packed_bytes": 2025472,
+      "packed_mib": 1.931640625,
+      "reduction_percent": 68.08905380333951,
+      "original_sha256": "de4c6d12ed16da44ee3a2f376cfb50c1cf0fd12aa08ccc61c85a27c5294667e9",
+      "packed_sha256": "7f6aa65cdf50eddd6fceae6bfacf3c99536c1c98313eebd0a347178ec04d4925"
+    }
+  ],
+  "validation": [
+    "UPX -t passed for both artifacts",
+    "PE DLL characteristics unchanged, ASLR/DEP flags retained, relocation directories present",
+    "Real C host linked with original import library and loaded packed DLL successfully",
+    "Packed DLL ABI lifecycle, SQLite and encrypted MOC file roundtrip passed",
+    "Packed EXE HTTP health, authenticated operations and SSE passed"
+  ],
+  "limits": [
+    "No antivirus compatibility claim",
+    "No startup-time or process-memory benchmark",
+    "No real-provider TLS test",
+    "Windows x64 tested only",
+    "Packaging script stages validated individually; complete script not rerun to repeat identical compression"
+  ]
+}
