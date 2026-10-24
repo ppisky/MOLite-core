@@ -1,5 +1,7 @@
 # API v1
 
+[English](api.md)
+
 HTTP `POST /v1/operations`，Content-Type 为 application/json；SSE 用相同请求发送到 `POST /v1/stream`。配置了 HTTP token 时带 `Authorization: Bearer ...`。Rust 使用 `Engine::execute` 或 `Engine::chat`，C 使用 `molite_submit`。`version` 可省略，显式提供必须为1。
 
 ## 初始配置示例

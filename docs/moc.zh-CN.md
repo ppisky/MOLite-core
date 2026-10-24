@@ -1,5 +1,7 @@
 # MOC 原生适配
 
+[English](moc.md)
+
 直接复用原版 MOC v3 与密码封装：tar+zstd、manifest.toml、模块路径/摘要校验、安全解压、AES-256-GCM/Argon2id。没有图片载体或其他角色卡解码。
 
 角色使用 characters/spaces/00000000-0000-0000-0000-000000000001/<uuid>/character.toml 和 Markdown。归档 UUID 仅为线格式命名空间，不建立个人空间或记忆池。可同时携带多个角色。

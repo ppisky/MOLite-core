@@ -1,5 +1,7 @@
 # C ABI v1
 
+[English](c-abi.md)
+
 实际合同为 [`include/molite.h`](../include/molite.h)，测试脚本为 `scripts/test-c-abi.cmd`。当前实机验证 Windows x64；同时生成 rlib、cdylib、staticlib。
 
 Engine 和 Task 为 `uint64_t` 不透明句柄，0无效，不能解引用。公共缓冲区为 `{uint8_t *data; size_t len;}`，不带 NUL。

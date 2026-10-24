@@ -30,7 +30,7 @@ cargo run --release --bin molite-server
 - 完整运行数据使用明确声明的 `molite-runtime` MOC 扩展。原版 MOMO MOC 的角色可导入；旧 Space 会话/记忆树自动迁移尚未实现，返回 `skipped_modules` 明确列出。详见 [MOC 说明](docs/moc.zh-CN.md)。
 - 使用固定默认投影规则，不含可编辑 YAML 状态契约、DDM 个性档案或通用工具执行器。历史最多48轮，未接供应商专用 token 计数器。
 - 一个 Engine 串行协调，网络调用不持有 SQLite 写事务；每个目录推荐只由一个 Engine 所有者使用。
-- API v1 为本地初版契约。Linux/macOS 未实机验证；供应商联调使用本地模拟服务，没有调用付费模型。
+- API v1 为本地初版契约。CI 覆盖 Linux x64、macOS ARM64 和 Windows x64 的构建与测试；供应商联调使用本地模拟服务，没有调用付费模型。
 
 ## 构建与验证
 
