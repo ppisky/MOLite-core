@@ -7,7 +7,7 @@ New-Item -ItemType Directory -Path $run | Out-Null
 $originalFlags = $env:LIBSQLITE3_FLAGS
 $results = @()
 try {
-    foreach ($case in @('baseline', 'lto-speed', 'lto-size', 'lean-rustls', 'lean-native', 'sqlite-trim')) {
+    foreach ($case in @('current', 'baseline', 'lto-speed', 'lto-size', 'lean-rustls', 'lean-native', 'sqlite-trim')) {
         $source = Join-Path $run $case
         New-Item -ItemType Directory -Path $source | Out-Null
         foreach ($directory in @('src', 'tests')) {
@@ -17,10 +17,11 @@ try {
             Copy-Item -LiteralPath (Join-Path $repo $file) -Destination $source
         }
         $manifest = Get-Content (Join-Path $source 'Cargo.toml') -Raw
-        if ($manifest -match '(?m)^\[profile\.release\]') {
-            throw 'Baseline now contains a release profile; update this experiment before comparing.'
+        if ($case -ne 'current') {
+            # Historical variants retain their original profile, independently of production.
+            $manifest = [regex]::Replace($manifest, '(?ms)^\[profile\.release\]\r?\n.*?(?=^\[|\z)', '')
         }
-        if ($case -ne 'baseline') {
+        if ($case -notin @('current', 'baseline')) {
             $level = if ($case -eq 'lto-speed') { '3' } else { '"s"' }
             $manifest += "`n[profile.release]`nlto = `"thin`"`ncodegen-units = 1`nopt-level = $level`n"
         }

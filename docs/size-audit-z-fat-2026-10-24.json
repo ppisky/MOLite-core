@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-24",
+  "base_commit": "4ff2cc5",
+  "platform": "Windows x86_64-pc-windows-msvc",
+  "rustc": "1.99.0",
+  "profile": {
+    "opt-level": "z",
+    "lto": true
+  },
+  "other_profile_settings": "Cargo defaults, including panic=unwind",
+  "dependency_changes": false,
+  "results": {
+    "dll": {
+      "bytes": 7346688,
+      "mib": 7.00634765625,
+      "reduction_percent": 24.9686258104999
+    },
+    "exe": {
+      "bytes": 6797824,
+      "mib": 6.48291015625,
+      "reduction_percent": 38.96474049556383
+    }
+  },
+  "validation": {
+    "build": "cargo build --release --locked --lib --bin molite-server: passed",
+    "release_dll_abi": "open/submit/poll/free/release/close: passed",
+    "release_tests": "cargo test --release --locked: 30 passed, 0 failed",
+    "audit_script": "PowerShell syntax and historical profile isolation checks passed; full historical matrix not rerun"
+  },
+  "caveats": [
+    "No real-provider TLS or runtime performance benchmark.",
+    "Previous size experiments used different profiles; their savings cannot be added to these measurements.",
+    "Cargo LTO does not automatically enable cross-language LTO for bundled C libraries."
+  ]
+}

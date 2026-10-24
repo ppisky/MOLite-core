@@ -41,3 +41,7 @@ tempfile = "3"
 
 [lints.rust]
 unsafe_code = "deny"
+
+[profile.release]
+opt-level = "z"
+lto = true
