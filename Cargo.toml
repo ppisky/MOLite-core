@@ -30,7 +30,7 @@ walkdir = "2"
 tempfile = "3"
 aes-gcm = "0.11"
 argon2 = "0.5"
-rand = { version = "0.9", default-features = false, features = ["thread_rng"] }
+rand = { version = "0.10", default-features = false, features = ["thread_rng"] }
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 zeroize = "1"
 semver = "1"
