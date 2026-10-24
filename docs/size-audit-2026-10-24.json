@@ -1,0 +1,268 @@
+{
+  "date": "2026-10-24",
+  "source_commit": "3827e96",
+  "platform": "Windows x86_64-pc-windows-msvc",
+  "rustc": "1.99.0",
+  "units": "bytes; MiB = bytes / 1048576",
+  "production_configuration_changed": false,
+  "sizes": [
+    {
+      "case": "baseline",
+      "dll_bytes": 9791488,
+      "exe_bytes": 11137536
+    },
+    {
+      "case": "lto-speed",
+      "dll_bytes": 9198592,
+      "exe_bytes": 10628096
+    },
+    {
+      "case": "lto-size",
+      "dll_bytes": 7156736,
+      "exe_bytes": 7442432
+    },
+    {
+      "case": "lean-rustls",
+      "dll_bytes": 6456320,
+      "exe_bytes": 6645248
+    },
+    {
+      "case": "lean-native",
+      "dll_bytes": 4898304,
+      "exe_bytes": 5176832
+    },
+    {
+      "case": "sqlite-trim",
+      "dll_bytes": 4615168,
+      "exe_bytes": 4892672
+    }
+  ],
+  "text_attribution": {
+    "method": "Approximate .text attribution by adjacent linker-map symbol addresses; includes alignment/unlabelled gaps, not exact function sizes. Generic code attributed to emitting object.",
+    "text_bytes": 7180735,
+    "owners": [
+      [
+        "molite_core (+ instantiated generic dependencies)",
+        1495792
+      ],
+      [
+        "liblibsqlite3_sys",
+        1359146
+      ],
+      [
+        "libreqwest",
+        895586
+      ],
+      [
+        "libaws_lc_sys",
+        788032
+      ],
+      [
+        "librustls",
+        605056
+      ],
+      [
+        "libzstd_sys",
+        495604
+      ],
+      [
+        "libh2",
+        301824
+      ],
+      [
+        "libtokio",
+        152416
+      ],
+      [
+        "libhyper",
+        100704
+      ],
+      [
+        "libstd",
+        91879
+      ],
+      [
+        "libwebpki",
+        81728
+      ],
+      [
+        "libcore",
+        68149
+      ],
+      [
+        "libtoml",
+        65904
+      ],
+      [
+        "libhyper_util",
+        61728
+      ],
+      [
+        "libtar",
+        60816
+      ],
+      [
+        "liburl",
+        55506
+      ],
+      [
+        "libtoml_parser",
+        46096
+      ],
+      [
+        "libserde_json",
+        44176
+      ],
+      [
+        "libidna",
+        43552
+      ],
+      [
+        "libmio",
+        37888
+      ],
+      [
+        "libhttp",
+        29728
+      ],
+      [
+        "libwalkdir",
+        26144
+      ],
+      [
+        "librustc_demangle",
+        23176
+      ],
+      [
+        "libchrono",
+        22992
+      ],
+      [
+        "libaws_lc_rs",
+        20928
+      ]
+    ],
+    "largest_spans": [
+      [
+        37176,
+        "liblibsqlite3_sys",
+        "sqlite3VdbeExec"
+      ],
+      [
+        32336,
+        "molite_core (+ instantiated generic dependencies)",
+        "_RNCNvMNtCsbMEnVvEoP4H_11molite_core7runtimeNtB4_6Engine7execute0B6_.llvm.8845844939891895664"
+      ],
+      [
+        24992,
+        "libh2",
+        "_RNvNtNtCshHPg72CKqCo_2h25codec11framed_read12decode_frame"
+      ],
+      [
+        22640,
+        "molite_core (+ instantiated generic dependencies)",
+        "_RINvXs0_NtNtNtCsefhSdijLiRG_4toml2de12deserializer5valueNtB6_17ValueDeserializerNtNtCshFTgUVv1uIK_10serde_core2de12Deserializer18deserialize_structNtNvXNvNtCsbMEnVvEoP4H_11molite_core3mocs_1__NtB2s_8ManifestNtB1i_11Deserialize11deserialize9___VisitorEB2u_.llvm.4541798587664133480"
+      ],
+      [
+        21536,
+        "libreqwest",
+        "_RNvMs_NtNtCshHPg72CKqCo_2h25proto10connectionINtB4_10ConnectionINtNtNtNtCskanRciBUXRf_5hyper6common2io6compat6CompatNtNtNtCsdKqNLieUMX7_7reqwest7connect6sealed4ConnENtNtB8_6client4PeerINtNtNtB18_5proto2h27SendBufNtNtCs5a8lGZvVgpg_5bytes5bytes5BytesEE4pollB1W_"
+      ],
+      [
+        21044,
+        "liblibsqlite3_sys",
+        "sqlite3Pragma"
+      ],
+      [
+        19904,
+        "molite_core (+ instantiated generic dependencies)",
+        "_RNCNvMNtCsbMEnVvEoP4H_11molite_core7runtimeNtB4_6Engine10chat_inner0B6_"
+      ],
+      [
+        19232,
+        "libreqwest",
+        "_RNCNvMs_NtNtNtCsjUDSpHnVuK7_10hyper_util6client6legacy6clientINtB6_6ClientNtNtCsdKqNLieUMX7_7reqwest7connect9ConnectorNtNtNtB1e_10async_impl4body4BodyE12send_request0B1e_"
+      ],
+      [
+        18512,
+        "molite_core (+ instantiated generic dependencies)",
+        "_RINvXs0_NtNtNtCsefhSdijLiRG_4toml2de12deserializer5valueNtB6_17ValueDeserializerNtNtCshFTgUVv1uIK_10serde_core2de12Deserializer18deserialize_structNtNvXNvNtCsbMEnVvEoP4H_11molite_core3mocs7_1__NtB2s_11ModuleEntryNtB1i_11Deserialize11deserialize9___VisitorEB2u_"
+      ],
+      [
+        17776,
+        "libreqwest",
+        "_RNCNCNCNvMs_NtNtNtCsjUDSpHnVuK7_10hyper_util6client6legacy6clientINtBa_6ClientNtNtCsdKqNLieUMX7_7reqwest7connect9ConnectorNtNtNtB1i_10async_impl4body4BodyE10connect_to0s_00B1i_.llvm.16385612189027504270"
+      ],
+      [
+        16960,
+        "molite_core (+ instantiated generic dependencies)",
+        "_RINvXs5_NtCs16PRmCLE25U_10serde_json2deQINtB6_12DeserializerNtNtB8_4read9SliceReadENtNtCshFTgUVv1uIK_10serde_core2de12Deserializer18deserialize_structNtNvXNvNtCsbMEnVvEoP4H_11molite_core6cryptos1_1__NtB2v_17EncryptedEnvelopeNtB1l_11Deserialize11deserialize9___VisitorEB2x_"
+      ],
+      [
+        15984,
+        "libh2",
+        "_RNCNvMsg_NtNtCshHPg72CKqCo_2h25frame7headersNtB7_11HeaderBlock4load0Bb_"
+      ],
+      [
+        15728,
+        "librustls",
+        "_RNvXs7_NtNtCsaevNWHaEQws_6rustls6client5tls13NtB5_14ExpectFinishedINtNtB9_12common_state5StateNtNtB7_11client_conn20ClientConnectionDataE6handle"
+      ],
+      [
+        15504,
+        "libaws_lc_sys",
+        "fiat_p384_square"
+      ],
+      [
+        15216,
+        "molite_core (+ instantiated generic dependencies)",
+        "_RNvMNtCsbMEnVvEoP4H_11molite_core8portableNtNtB4_5store5Store10import_moc"
+      ],
+      [
+        15028,
+        "liblibsqlite3_sys",
+        "yy_reduce"
+      ],
+      [
+        14928,
+        "libh2",
+        "_RNvXsc_NtCshHPg72CKqCo_2h26serverNtB5_4PeerNtNtNtB7_5proto4peer4Peer20convert_poll_message"
+      ],
+      [
+        14432,
+        "liblibsqlite3_sys",
+        "sqlite3Select"
+      ],
+      [
+        14096,
+        "libreqwest",
+        "_RNvMs2_NtNtCsdKqNLieUMX7_7reqwest10async_impl6clientNtB5_13ClientBuilder5build"
+      ],
+      [
+        14064,
+        "molite_core (+ instantiated generic dependencies)",
+        "_RINvXs5_NtCs16PRmCLE25U_10serde_json2deQINtB6_12DeserializerNtNtB8_4read7StrReadENtNtCshFTgUVv1uIK_10serde_core2de12Deserializer18deserialize_structNtNvXNvNtCsbMEnVvEoP4H_11molite_core6domainsn_1__NtB2t_6MemoryNtB1j_11Deserialize11deserialize9___VisitorEB2v_"
+      ]
+    ]
+  },
+  "validation": {
+    "lean_native_rust_tests": 30,
+    "sqlite_trim_rust_tests": 30,
+    "all_variants_abi_smoke": true,
+    "performance_benchmark": false,
+    "real_provider_tls_integration": false
+  },
+  "notes": [
+    "Link-map attribution uses adjacent symbols and includes alignment/unlabelled gaps; generic instantiations are charged to their emitting object.",
+    "lean-rustls disables reqwest default features and enables json, stream, rustls.",
+    "lean-native changes that TLS backend to native-tls (Windows Schannel).",
+    "sqlite-trim additionally undefines FTS3, FTS3_PARENTHESIS, FTS5, RTREE, DBSTAT_VTAB and SOUNDEX. JSON, WAL and foreign keys remain enabled.",
+    "All non-baseline variants use ThinLTO and codegen-units=1. lto-speed retains opt-level=3; other variants use opt-level=s.",
+    "No panic=abort, binary packer, external SQLite or reduced MOLite business API was used."
+  ],
+  "references": [
+    "https://github.com/FFmpeg/FFmpeg/blob/master/configure",
+    "https://doc.rust-lang.org/cargo/reference/profiles.html",
+    "https://docs.rs/native-tls/latest/native_tls/"
+  ]
+}
