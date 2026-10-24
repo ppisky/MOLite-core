@@ -13,7 +13,8 @@ root = Path(__file__).resolve().parent.parent
 os.chdir(root)
 label = sys.argv[1]
 source = Path(sys.argv[2] if len(sys.argv) > 2 else "target/release")
-metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--format-version=1"]))
+host = subprocess.check_output(["rustc", "-vV"], text=True).split("host: ")[1].splitlines()[0]
+metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--format-version=1", "--filter-platform", host]))
 package = next(p for p in metadata["packages"] if p["name"] == "molite-core")
 version = package["version"]
 tag = os.environ.get("GITHUB_REF", "")
@@ -27,6 +28,7 @@ stage.mkdir(parents=True)
 for filename in ["LICENSE", "NOTICE", "README.md", "README.zh-CN.md"]:
     shutil.copy2(root / filename, stage)
 shutil.copytree(root / "include", stage / "include")
+shutil.copytree(root / ".cargo", stage / ".cargo")
 shutil.copytree(root / "docs", stage / "docs")
 for filename in ["molite-server.exe", "molite-server", "molite_core.dll", "molite_core.dll.lib", "molite_core.lib", "libmolite_core.so", "libmolite_core.dylib", "libmolite_core.a"]:
     if (source / filename).is_file():
@@ -45,6 +47,14 @@ for dependency in metadata["packages"]:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, destination)
             texts.append(str(relative))
+    if not texts and dependency["name"] in {"objc2-core-foundation", "objc2-io-kit"} and dependency["version"] == "0.3.2":
+        target.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(root / "third_party/objc2/LICENSE.md", target / "UPSTREAM-LICENSE.md")
+        shutil.copy2(root / "LICENSE", target / "LICENSE-APACHE-2.0")
+        shutil.copy2(root / "third_party/objc2/SOURCE.md", target / "SOURCE.md")
+        texts = ["UPSTREAM-LICENSE.md", "LICENSE-APACHE-2.0"]
+    if not texts:
+        raise SystemExit("Dependency license text missing: " + dependency["name"])
     licenses.append({"name": dependency["name"], "version": dependency["version"], "license": dependency["license"], "repository": dependency["repository"], "texts": texts})
 (stage / "THIRD-PARTY.json").write_text(json.dumps(licenses, indent=2) + "\n", encoding="utf-8")
 (stage / "BUILD.json").write_text(json.dumps({"commit": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(), "rustc": subprocess.check_output(["rustc", "-V"], text=True).strip(), "target": label, "lock_sha256": hashlib.sha256(Path("Cargo.lock").read_bytes()).hexdigest()}, indent=2) + "\n", encoding="utf-8")
