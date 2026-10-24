@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-24",
+  "base_commit": "8593472",
+  "platform": "Windows x86_64-pc-windows-msvc",
+  "profile": {
+    "opt-level": "z",
+    "lto": true
+  },
+  "retained": [
+    "rustls",
+    "AWS-LC",
+    "HTTP/2",
+    "system proxy",
+    "MOC encryption",
+    "zstd fast decode paths"
+  ],
+  "sqlite_flags": "-USQLITE_ENABLE_FTS3 -USQLITE_ENABLE_FTS3_PARENTHESIS -USQLITE_ENABLE_FTS5 -USQLITE_ENABLE_RTREE -USQLITE_ENABLE_DBSTAT_VTAB -USQLITE_SOUNDEX -USQLITE_ENABLE_COLUMN_METADATA -USQLITE_ENABLE_LOAD_EXTENSION -DSQLITE_OMIT_LOAD_EXTENSION",
+  "changes": [
+    "Remove SQLite FTS3/5, RTree, DBSTAT, Soundex, column origin metadata and extension loading",
+    "Remove zstd legacy decoding and dictionary training",
+    "Remove unused tokio-stream and rusqlite statement cache",
+    "Disable unused axum default features, reqwest charset, chrono local timezone, tar xattr and rand small_rng"
+  ],
+  "sizes": {
+    "dll": {
+      "before_bytes": 7346688,
+      "after_bytes": 6755328,
+      "saved_bytes": 591360,
+      "reduction_percent": 8.049341417520385
+    },
+    "exe": {
+      "before_bytes": 6797824,
+      "after_bytes": 6347264,
+      "saved_bytes": 450560,
+      "reduction_percent": 6.628003314001657
+    }
+  },
+  "validation": [
+    "31 release tests passed",
+    "release DLL ABI open/submit/poll/free/release/close passed",
+    "cargo clippy --locked --all-targets -- -D warnings passed",
+    "current release measurement script executed successfully"
+  ],
+  "limitations": [
+    "Windows only; Linux/macOS not executed",
+    "No real-provider TLS or performance benchmark",
+    "External Rust workspaces must carry SQLite build flags; Cargo does not inherit dependency .cargo/config.toml"
+  ]
+}

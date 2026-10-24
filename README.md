@@ -43,4 +43,10 @@ cmd /c scripts\test-c-abi.cmd
 
 Windows 输出位于 `target/release/`：`molite-server.exe`、`molite_core.dll`、`molite_core.dll.lib`、`molite_core.lib`。头文件见 [include/molite.h](include/molite.h)，用法见 [C ABI](docs/c-abi.zh-CN.md)。
 
+发布统一使用 `opt-level="z"`、完整 LTO，保留 rustls / AWS-LC、HTTP/2 和系统代理支持。只启用所需依赖功能：zstd 不含历史格式解码和字典训练，tar 不处理文件系统扩展属性；网络 JSON/SSE 使用 UTF-8，不启用通用字符集转换。MOC 仍使用当前原生格式和标准 zstd 数据，保留压缩等级 9、快速解码及密码封装。
+
+仓库的 [.cargo/config.toml](.cargo/config.toml) 裁掉 SQLite 的 FTS3/5、RTree、DBSTAT、Soundex、列来源元数据和动态扩展加载；保留 JSON、WAL、事务、约束、线程安全及查询优化。作为 Rust 依赖在其他工作区编译时，Cargo 不会继承依赖仓库的配置，需要将该 `LIBSQLITE3_FLAGS` 配置放入宿主工作区；已有同名环境变量也会覆盖仓库默认值。`tests/sqlite_profile.rs` 验证实际编译选项与关键数据库功能。
+
+运行 `powershell -File scripts/measure-size.ps1` 可按当前唯一发布配置构建并记录体积；历史实验数据保存在 `docs/size-audit-*.json`，不是受支持的发布变体。
+
 设计与实现差异以本 README、API 及 [实施记录](docs/implementation-plan.zh-CN.md) 为准；[设计草案](docs/design.zh-CN.md) 保留目标范围。复用来源和许可证见 [NOTICE](NOTICE)、[LICENSE](LICENSE)。Git 记录仅在本地。
