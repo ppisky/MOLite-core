@@ -4,6 +4,13 @@
 
 实际合同为 [`include/molite.h`](../include/molite.h)，测试脚本为 `scripts/test-c-abi.cmd`。当前实机验证 Windows x64；同时生成 rlib、cdylib、staticlib。
 
+Android 宿主须在 JVM 线程上先调用 `molite_android_init(JNIEnv*, ApplicationContext)`，再调用 `molite_open`。
+该 Android 专用扩展初始化 rustls 的系统证书验证器；必须同时打包与 Cargo.lock 中
+`rustls-platform-verifier-android` 版本一致的 `org.rustls:rustls-platform-verifier` AAR（当前 0.2.0）。
+Context 会被转为全局引用，只接受 Application Context，不能传 Activity。
+返回既有状态码，不改变 C ABI v1 的任务与缓冲区合同。其他平台不导出此扩展。
+使用 NDK r28 以上构建 arm64-v8a/x86_64 `.so`，并设置 16 KiB ELF 页对齐。
+
 Engine 和 Task 为 `uint64_t` 不透明句柄，0无效，不能解引用。公共缓冲区为 `{uint8_t *data; size_t len;}`，不带 NUL。
 
 1. `molite_open(path, len, &engine)`：UTF-8数据目录，不是 JSON。

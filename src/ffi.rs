@@ -64,6 +64,33 @@ unsafe fn output(ptr: *mut Buffer, value: Value) {
 pub extern "C" fn molite_abi_version() -> u32 {
     1
 }
+
+/// Initialize Android's platform certificate verifier before opening an Engine.
+/// The host must also package rustls-platform-verifier's matching Android AAR.
+/// # Safety
+/// `env` is the current thread's valid JNIEnv and `context` is a live local or
+/// global reference to the Application Context, both supplied by the same JVM.
+#[cfg(target_os = "android")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn molite_android_init(
+    env: *mut std::ffi::c_void,
+    context: *mut std::ffi::c_void,
+) -> i32 {
+    boundary(|| {
+        if env.is_null() || context.is_null() {
+            return INVALID;
+        }
+        let mut env = unsafe { jni::EnvUnowned::from_raw(env.cast()) };
+        let outcome = env.with_env(|env| {
+            let context = unsafe { jni::objects::JObject::from_raw(env, context.cast()) };
+            rustls_platform_verifier::android::init_with_env(env, context)
+        });
+        match outcome.into_outcome() {
+            jni::Outcome::Ok(()) => OK,
+            _ => FAILED,
+        }
+    })
+}
 /// # Safety
 /// `path` points to `len` readable UTF-8 bytes; `out` is writable for one handle.
 #[unsafe(no_mangle)]

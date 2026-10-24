@@ -1,5 +1,12 @@
 # C ABI v1
 
+Android hosts must call `molite_android_init(JNIEnv*, ApplicationContext)` on a JVM-owned
+thread before `molite_open`, and package the `org.rustls:rustls-platform-verifier` AAR
+matching Cargo.lock's `rustls-platform-verifier-android` (currently 0.2.0).
+This Android-only extension initializes system certificate verification, retains an
+Application Context global reference, and uses the existing status codes. Do not pass
+an Activity. Other platforms do not export it. Build with NDK r28+ and 16 KiB ELF alignment.
+
 The contract is [include/molite.h](../include/molite.h). Rust also produces `rlib` and `staticlib`; define `MOLITE_STATIC` before including the header when linking statically. See [examples/c_smoke.c](../examples/c_smoke.c).
 
 Engine and Task are opaque `uint64_t` handles; zero is invalid. Do not dereference them. Buffers contain `{uint8_t *data; size_t len;}` without a NUL terminator.
