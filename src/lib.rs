@@ -7,8 +7,16 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+pub mod domain;
+pub mod memory;
+pub mod store;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("I/O: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("{0}")]
+    Message(String),
     #[error("storage: {0}")]
     Storage(#[from] rusqlite::Error),
     #[error("encoding: {0}")]
@@ -45,7 +53,7 @@ pub struct Status {
 }
 
 pub struct Scheduler {
-    db: Connection,
+    pub(crate) db: Connection,
 }
 
 impl Scheduler {
