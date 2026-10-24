@@ -9,7 +9,7 @@ publish = false
 crate-type = ["rlib", "cdylib", "staticlib"]
 
 [dependencies]
-rusqlite = { version = "0.38", default-features = false, features = ["bundled"] }
+rusqlite = { version = "0.40", default-features = false, features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -20,17 +20,17 @@ futures-util = { version = "0.3", default-features = false, features = ["std", "
 uuid = { version = "1", features = ["v7", "serde"] }
 sha2 = "0.11"
 hex = "0.4"
-base64 = "0.22"
+base64 = "0.23"
 unicode-normalization = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["now", "serde"] }
 toml = "1"
 tar = { version = "0.4", default-features = false }
-zstd = { version = "0.13", default-features = false }
+zstd = { version = "0.14", default-features = false }
 walkdir = "2"
 tempfile = "3"
 aes-gcm = "0.11"
-argon2 = "0.5"
-rand = { version = "0.9", default-features = false, features = ["thread_rng"] }
+argon2 = "0.6"
+rand = { version = "0.10", default-features = false, features = ["thread_rng"] }
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 zeroize = "1"
 semver = "1"
