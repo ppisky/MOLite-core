@@ -60,7 +60,7 @@ jobs:
         run: scripts\test-c-abi.cmd target\release
       - name: Package native release and dependency licenses
         shell: bash
-        run: bash scripts/package-release.sh ${{ matrix.target }}
+        run: PYTHON=python bash scripts/package-release.sh ${{ matrix.target }}
       - name: Maximum UPX packing and verification
         if: runner.os == 'Windows'
         shell: pwsh
