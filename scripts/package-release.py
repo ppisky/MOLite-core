@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
@@ -21,10 +22,11 @@ tag = os.environ.get("GITHUB_REF", "")
 if tag.startswith("refs/tags/") and tag != "refs/tags/v" + version:
     raise SystemExit("tag must match Cargo.toml version")
 name = f"molite-core-{version}-{label}"
-stage = root / "target" / "packages" / name
-if stage.exists():
-    raise SystemExit(f"package staging directory already exists: {stage}")
-stage.mkdir(parents=True)
+staging_parent = root / "target" / "packages"
+staging_parent.mkdir(parents=True, exist_ok=True)
+staging_directory = tempfile.TemporaryDirectory(prefix="build-", dir=staging_parent)
+stage = Path(staging_directory.name) / name
+stage.mkdir()
 for filename in ["LICENSE", "NOTICE", "README.md", "README.zh-CN.md"]:
     shutil.copy2(root / filename, stage)
 shutil.copytree(root / "include", stage / "include")
@@ -73,3 +75,6 @@ else:
 checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
 archive.with_name(archive.name + ".sha256").write_text(f"{checksum}  {archive.name}\n", encoding="utf-8")
 print(archive)
+
+assert stage.parent.resolve().parent == staging_parent.resolve()
+staging_directory.cleanup()
