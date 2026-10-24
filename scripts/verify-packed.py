@@ -32,7 +32,7 @@ def verify(directory, reference=None):
             if original_reloc[1]:
                 assert packed_reloc[0] and packed_reloc[1], "relocation directory missing"
         print("PE: DLL characteristics (including ASLR/DEP) retained; relocations present", flush=True)
-    dll = c.CDLL(str(directory / "molite_core.dll"))
+    dll = c.CDLL(str(directory / ("molite_core.dll" if os.name == "nt" else ("libmolite_core.dylib" if sys.platform == "darwin" else "libmolite_core.so"))))
     dll.molite_open.argtypes = [c.c_char_p, c.c_size_t, c.POINTER(c.c_uint64)]
     dll.molite_submit.argtypes = [c.c_uint64, c.c_char_p, c.c_size_t, c.POINTER(c.c_uint64)]
     dll.molite_task_next.argtypes = [c.c_uint64, c.c_uint32, c.POINTER(Buffer)]
@@ -91,9 +91,9 @@ def verify(directory, reference=None):
         env = dict(os.environ, MOLITE_DATA=str(root / "http"), MOLITE_LISTEN="127.0.0.1:0", MOLITE_HTTP_TOKEN="packed-test")
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with (root / "server.log").open("w+b") as log:
-            process = subprocess.Popen([str(directory / "molite-server.exe")], env=env,
+            process = subprocess.Popen([str(directory / ("molite-server.exe" if os.name == "nt" else "molite-server"))], env=env,
                                        stdout=subprocess.DEVNULL, stderr=log,
-                                       creationflags=subprocess.CREATE_NO_WINDOW)
+                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             try:
                 address = None
                 deadline = time.monotonic() + 30

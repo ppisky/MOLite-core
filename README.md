@@ -1,54 +1,56 @@
 # MOLite Core
 
-Rust 实现的场景记忆角色对话内核。DMW-only MO State 包含五维投影、快照、来源修复及轮次驱动维护。只有原生 MOC；没有个人 Space、角色记忆池、NSG、向量数据库、外部角色卡或图片载体。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-## 运行
+A small Rust core for character conversations with scene-scoped DMW v2 / MO State v2 memory. MOLite follows MOMO Core's provider → model → model parameter group → purpose → scene → conversation workflow, with one focused configuration and current-format support.
 
-```powershell
-cargo run --release --bin molite-server
+There are no personal Spaces, character-owned or implicit shared memory pools, NSG, vector databases, foreign character-card formats, image carriers, or LSB carriers. Folders and tags classify resources; explicitly selected scene scopes control memory injection.
+
+## Quick start
+
+Install the Rust version in `rust-toolchain.toml` and a native C/C++ toolchain (MSVC Build Tools on Windows; a compiler and CMake on Unix).
+
+```sh
+cargo run --release --locked --bin molite-server
 ```
 
-默认 `127.0.0.1:3791`，数据目录 `data/`。可设置 `MOLITE_DATA`、`MOLITE_LISTEN`、`MOLITE_HTTP_TOKEN`；非回环监听必须配置 token。首次按服务商→模型→模型参数组→用途选择→场景→会话的顺序配置，见 [API 使用说明](docs/api.zh-CN.md)。
+The server listens on `127.0.0.1:3791` and stores data in `data/`. Set `MOLITE_DATA`, `MOLITE_LISTEN`, and optionally `MOLITE_HTTP_TOKEN`. A non-loopback listener requires a token. Configure your provider, models, parameter groups and purposes before creating a scene and conversation. API credentials are read from named environment variables, never exported with MOC.
 
-## 已接入
+See the [API guide](docs/api.md), [native MOC format](docs/moc.md), and [C ABI guide](docs/c-abi.md). [Chinese guides](README.zh-CN.md) are also available.
 
-- 服务商、文本/视觉模型、可复用模型参数组；三个用途分别选组，组指定协议、流式偏好、超时和参数。
-- Chat Completions、Responses、Anthropic Messages；流式增量、完成校验、取消、冻结请求重试。
-- 场景、会话、多角色、文件夹/标签、明确选择的场景注入范围。
-- 默认12轮提炼，支持1–200轮和提前执行；提前成功后重新累计未处理轮次，失败保留原批次。
-- 编辑、删除、模型重生立即禁用关联记忆并修复；无关记忆保留，修复不增加轮次。启动重建索引，在 Tokio 环境中每30秒恢复维护。
-- DMW 词元/中文二元词、别名、标签、有界一跳检索；五维快照、叙事状态、保护核心事实和承诺的轮次生命周期。
-- 图片直传或视觉回退，UTF-8文本附件注入，任意类型数据文件存储及完整性校验。
-- 原生 MOC v3、多角色、MOLite 场景/会话/DMW/来源/计数往返、可选文件、原版密码封装。
-- Rust API、HTTP/SSE、标准 C ABI；Windows x64 DLL 已通过真实 C 程序调用验证。
+## Behavior
 
-## 兼容与运行边界
+- Three provider protocols: Chat Completions, Responses and Anthropic Messages. Parameter groups choose the request protocol, streaming preference, timeout and native request parameters.
+- Text and vision model configuration; direct image input for vision models or image-to-text fallback for text-only models.
+- Scene-scoped DMW evidence, five-dimensional state snapshots and source revisions. Editing, deleting or regenerating an exchange invalidates affected memory and schedules repair.
+- Extraction defaults to 12 completed rounds; configure 1–200 rounds or trigger early extraction. Successful early extraction restarts the cadence; repair does not add rounds.
+- Native MOC v3 character import and MOLite state roundtrips, optional data files and password encryption. Only current format versions are accepted; no historical migration layer.
+- Rust API, HTTP/SSE and a standard C ABI. The core produces `rlib`, `cdylib` and `staticlib` artifacts.
 
-- PDF 可以存储、读取及随 MOC 携带；模型输入目前处理文本和PNG/JPEG/WebP/GIF，不包含 PDF 内容解析。
-- 完整运行数据使用明确声明的 `molite-runtime` MOC 扩展。原版 MOMO MOC 的角色可导入；旧 Space 会话/记忆树自动迁移尚未实现，返回 `skipped_modules` 明确列出。详见 [MOC 说明](docs/moc.zh-CN.md)。
-- 使用固定默认投影规则，不含可编辑 YAML 状态契约、DDM 个性档案或通用工具执行器。历史最多48轮，未接供应商专用 token 计数器。
-- 一个 Engine 串行协调，网络调用不持有 SQLite 写事务；每个目录推荐只由一个 Engine 所有者使用。
-- API v1 为本地初版契约。Linux/macOS 未实机验证；供应商联调使用本地模拟服务，没有调用付费模型。
+## Build and validate
 
-## 构建与验证
-
-```powershell
+```sh
 cargo fmt --check
-cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
+cargo test --release --locked
+cargo doc --locked --no-deps
 cargo build --release --locked
-cargo build --locked --lib
-cmd /c scripts\test-c-abi.cmd
 ```
 
-Windows 输出位于 `target/release/`：`molite-server.exe`、`molite_core.dll`、`molite_core.dll.lib`、`molite_core.lib`。头文件见 [include/molite.h](include/molite.h)，用法见 [C ABI](docs/c-abi.zh-CN.md)。
+CI builds Linux x64, macOS ARM64 and Windows x64, tests the C host and runtime adapters, and publishes build artifacts. Tags named `v<Cargo version>` publish release packages after all checks pass. See [contributing](CONTRIBUTING.md) for development and release instructions.
 
-发布统一使用 `opt-level="z"`、完整 LTO，保留 rustls / AWS-LC、HTTP/2 和系统代理支持。只启用所需依赖功能：zstd 不含历史格式解码和字典训练，tar 不处理文件系统扩展属性；网络 JSON/SSE 使用 UTF-8，不启用通用字符集转换。MOC 仍使用当前原生格式和标准 zstd 数据，保留压缩等级 9、快速解码及密码封装。
+Release builds use `opt-level="z"` and full LTO, retaining rustls, AWS-LC, HTTP/2 and system proxy support. SQLite is bundled with unused extensions disabled by [.cargo/config.toml](.cargo/config.toml). **When embedding MOLite as a Rust dependency, copy `LIBSQLITE3_FLAGS` to the host workspace configuration:** Cargo does not inherit configuration from dependency directories. An existing environment variable overrides the repository default. SQLite tests verify the actual compiled options.
 
-仓库的 [.cargo/config.toml](.cargo/config.toml) 裁掉 SQLite 的 FTS3/5、RTree、DBSTAT、Soundex、列来源元数据和动态扩展加载；保留 JSON、WAL、事务、约束、线程安全及查询优化。作为 Rust 依赖在其他工作区编译时，Cargo 不会继承依赖仓库的配置，需要将该 `LIBSQLITE3_FLAGS` 配置放入宿主工作区；已有同名环境变量也会覆盖仓库默认值。`tests/sqlite_profile.rs` 验证实际编译选项与关键数据库功能。
+Only required dependency features are enabled. zstd retains the standard current wire format and fast decode paths, without legacy decoding or dictionary training. tar excludes filesystem extended attributes; model JSON/SSE uses UTF-8. On Windows, `powershell -File scripts/pack-upx.ps1` builds separate copies with UPX `--ultra-brute` and verifies them; original binaries remain in `target/release/`. Packing requires Python 3 and MSVC Build Tools. Sign binaries after packing. See [measurements](docs/size-audit-upx-2026-10-24.json).
 
-运行 `powershell -File scripts/measure-size.ps1` 可按当前唯一发布配置构建并记录体积；历史实验数据保存在 `docs/size-audit-*.json`，不是受支持的发布变体。
+## Current boundaries
 
-Windows x64 可运行 `powershell -File scripts/pack-upx.ps1`，下载固定版本 UPX 5.2.1（校验下载包 SHA-256），以 `--ultra-brute` 搜索最高压缩率。原始 `target/release/` 文件保留，压缩副本位于独立的 `target/upx-时间戳/`。脚本验证压缩完整性、PE 加载属性、DLL C ABI、加密 MOC/文件往返和 HTTP/SSE，并运行真实 C 宿主；需要 Python 3 和 MSVC Build Tools。验证失败则报错，不把副本视为已验证产物。此步骤适用于未签名产物，代码签名应在压缩后完成。
+PDF and arbitrary data files can be stored and carried in MOC; input parsing supports UTF-8 text and PNG/JPEG/WebP/GIF, without PDF text extraction. Data storage is separate from model input.
 
-设计与实现差异以本 README、API 及 [实施记录](docs/implementation-plan.zh-CN.md) 为准；[设计草案](docs/design.zh-CN.md) 保留目标范围。复用来源和许可证见 [NOTICE](NOTICE)、[LICENSE](LICENSE)。Git 记录仅在本地。
+MOLite runtime data uses an explicit `molite-runtime` MOC extension. Original MOMO character payloads can be imported, but old Space conversations and memory trees are not migrated and are reported as skipped modules. Other hosts need support for the MOLite extension to restore its runtime state.
+
+State projection rules are fixed; editable YAML contracts, DDM personality profiles, generic tools and provider-specific token counting are not implemented. History is limited to 48 rounds. One Engine serializes coordination; use one Engine owner per data directory. Provider tests use local mocks, without paid API calls. CI coverage is not a claim of compatibility with every provider or host.
+
+## License
+
+Apache-2.0. MOLite contains adapted MOMO Core components; attribution is retained in [NOTICE](NOTICE). Release archives include dependency license texts. Source publication does not publish the crate to crates.io.

@@ -1,0 +1,110 @@
+name: CI
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 5 * * 1'
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+jobs:
+  rust:
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: macos-14
+            target: macos-aarch64
+          - os: windows-latest
+            target: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: always
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: '1.99.0'
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --release --locked
+      - run: cargo doc --locked --no-deps
+      - run: cargo build --release --locked --lib --bin molite-server
+      - name: Runtime ABI, SQLite, encrypted MOC, HTTP and SSE
+        run: python scripts/verify-packed.py target/release
+      - name: C host (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/test-c-abi.sh
+      - name: C host (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: scripts\test-c-abi.cmd target\release
+      - name: Package native release and dependency licenses
+        run: python scripts/package-release.py ${{ matrix.target }}
+      - name: Maximum UPX packing and verification
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/pack-upx.ps1
+          $packed = Get-ChildItem target -Directory -Filter 'upx-20*' | Sort-Object Name | Select-Object -Last 1
+          if (-not $packed) { throw 'Packed output missing' }
+          python scripts/package-release.py windows-x86_64-upx $packed.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Packed package creation failed' }
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit --deny warnings
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [rust, security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Verify and combine checksums
+        working-directory: dist
+        run: |
+          cat *.sha256 > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" dist/* --verify-tag --generate-notes --title "$RELEASE_TAG"

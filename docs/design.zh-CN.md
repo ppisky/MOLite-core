@@ -254,3 +254,6 @@ Rust 内部先采用清晰模块：领域、场景、DMW、MO State、MOC、数�
 已读取本地 `D:/MOMO-core` 的 MO State v2、DMW v2、MOC v3、原生角色卡、模型连接与用途请求配置、来源和生命周期说明及相关代码。观察基线为 commit `b01ec5e8744b0c549bb041ab22c31ba89f60d3a4`，分支 `codex/private-account-system`。
 
 该分支 AGENTS.md 明确其私有用途及禁止公开发布。本次仅修改 MOLite 设计，没有复制实现或发布。提取代码前需区分公开基线与私有改动，保留适用许可、署名及 NOTICE；不将私有账号系统内容默认作为公开来源。
+
+
+公开发布核验：复用的 momo-moc、momo-crypto 源码已与公开仓库 https://github.com/ppisky/MOMO-core 的 ef8425d3ef872cc9ed4491fc1e923e5a4ba40b8b 逐行比较；除测试文件引用路径外一致。早期本地观察基线不是公开来源标识，正式来源与署名以 NOTICE 为准。

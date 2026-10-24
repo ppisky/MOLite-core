@@ -12,7 +12,8 @@ int main(int argc,char **argv){
  int finished=0;
  for(int i=0;i<30&&!finished;i++){
   molite_buffer buffer={0};int status=molite_task_next(task,1000,&buffer);
-  if(status==MOLITE_EMPTY)continue;if(status!=MOLITE_OK)return 15;
+  if(status==MOLITE_EMPTY)continue;
+  if(status!=MOLITE_OK)return 15;
   char text[4096];if(buffer.len>=sizeof(text))return 16;
   memcpy(text,buffer.data,buffer.len);text[buffer.len]=0;puts(text);
   finished=strstr(text,"\"completed\"")!=NULL;molite_buffer_free(buffer);

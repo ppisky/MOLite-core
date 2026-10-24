@@ -1,0 +1,162 @@
+<div id="molite-design-map">
+  <style>
+    #molite-design-map { color: var(--foreground); padding: 8px 0 18px; }
+    #molite-design-map * { box-sizing: border-box; }
+    #molite-design-map .map-root { text-align: center; padding: 8px 92px 0; }
+    #molite-design-map h2 { margin: 0 0 6px; font-weight: 500; }
+    #molite-design-map .root-meta { color: var(--muted-foreground); }
+    #molite-design-map .root-stem { height: 26px; width: 1px; background: var(--border); margin: 12px auto 0; }
+    #molite-design-map .map-columns { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 28px; position: relative; padding: 0 8px; }
+    #molite-design-map .map-columns::before { content: ''; position: absolute; top: 0; left: 22px; right: calc(50% - 22px); height: 1px; background: var(--border); }
+    #molite-design-map .tree-column { min-width: 0; position: relative; padding: 20px 0 0 18px; }
+    #molite-design-map .tree-column::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 24px; width: 1px; background: var(--border); }
+    #molite-design-map .branch { margin: 0 0 18px; position: relative; --branch-color: var(--viz-series-1); }
+    #molite-design-map .branch::before { content: ''; position: absolute; top: 22px; left: -12px; width: 12px; height: 1px; background: var(--border); }
+    #molite-design-map .changed { --branch-color: var(--viz-series-2); }
+    #molite-design-map .removed { --branch-color: var(--viz-series-3); }
+    #molite-design-map .added { --branch-color: var(--viz-series-4); }
+    #molite-design-map .pending { --branch-color: var(--border); }
+    #molite-design-map summary { padding: 12px 10px; background: color-mix(in srgb, var(--branch-color) 11%, transparent); overflow-wrap: anywhere; }
+    #molite-design-map .kind { display: inline-block; margin-right: 8px; font-weight: 500; }
+    #molite-design-map .branch-title { font-weight: 500; }
+    #molite-design-map .leaves { padding: 8px 4px 0 16px; margin: 0 0 0 12px; border-left: 1px solid var(--border); list-style: none; }
+    #molite-design-map .leaves > li { position: relative; padding: 5px 0 5px 3px; overflow-wrap: anywhere; }
+    #molite-design-map .leaves > li::before { content: ''; position: absolute; left: -16px; top: 16px; width: 12px; height: 1px; background: var(--border); }
+    #molite-design-map .leaf-detail { display: block; color: var(--muted-foreground); margin-top: 3px; }
+    #molite-design-map .sequence { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+    #molite-design-map .step { padding: 3px 6px; background: var(--muted); color: var(--foreground); }
+    #molite-design-map .arrow { color: var(--muted-foreground); }
+    #molite-design-map .interfaces { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 5px; }
+    #molite-design-map .interfaces span { padding: 3px 6px; background: var(--muted); }
+    @media (max-width: 560px) {
+      #molite-design-map .map-root { padding: 8px 54px 0; }
+      #molite-design-map .map-columns { display: block; padding: 0 5px; }
+      #molite-design-map .map-columns::before { left: 11px; right: 50%; }
+      #molite-design-map .tree-column { padding-top: 16px; }
+      #molite-design-map .tree-column + .tree-column { padding-top: 0; }
+      #molite-design-map .tree-column::before { bottom: 0; }
+      #molite-design-map .tree-column:last-child::before { bottom: 24px; }
+    }
+  </style>
+
+  <div class="map-root">
+    <h2>MOLite Core</h2>
+    <div class="root-meta">从 MOMO Core 收敛 · 当前设计共识</div>
+    <div class="root-meta text-small">轻量 · 快速 · 配置简单 · 尚未实现</div>
+  </div>
+  <div class="root-stem" aria-hidden="true"></div>
+
+  <div class="map-columns" role="group" aria-label="MOLite设计变更思维导图">
+    <div class="tree-column">
+      <details class="branch" data-branch="core" open>
+        <summary class="cursor-interaction"><span class="kind">保留</span><span class="branch-title">核心运行能力</span></summary>
+        <ul class="leaves">
+          <li>MO State v2<span class="leaf-detail text-small">状态、叙事情境、快照、恢复</span></li>
+          <li>DMW 长期记忆<span class="leaf-detail text-small">检索、自动提炼、生命周期维护</span></li>
+          <li>每 12 个完整问答自动提炼<span class="leaf-detail text-small">保留现有节奏，不改成用户手动</span></li>
+        </ul>
+      </details>
+
+      <details class="branch changed" data-branch="memory" open>
+        <summary class="cursor-interaction"><span class="kind">调整</span><span class="branch-title">记忆范围与分类</span></summary>
+        <ul class="leaves">
+          <li>记忆只向指定场景范围注入</li>
+          <li>需要延续记忆时，自己切换范围</li>
+          <li>没有角色级记忆池或自动共享</li>
+          <li>文件夹、标签负责分类<span class="leaf-detail text-small">分类不改变记忆注入范围</span></li>
+        </ul>
+      </details>
+
+      <details class="branch" data-branch="files" open>
+        <summary class="cursor-interaction"><span class="kind">保留</span><span class="branch-title">原生 MOC 与数据文件</span></summary>
+        <ul class="leaves">
+          <li>只使用原生 MOC<span class="leaf-detail text-small">沿用角色、会话、记忆等携带能力</span></li>
+          <li>TXT、PNG、PDF 等独立存储</li>
+          <li>数据文件通常随 MOC 携带<span class="leaf-detail text-small">也可以明确选择不携带</span></li>
+          <li>原版加密能力保留</li>
+        </ul>
+      </details>
+
+      <details class="branch changed" data-branch="repair" open>
+        <summary class="cursor-interaction"><span class="kind">明确</span><span class="branch-title">消息修改后的记忆修复</span></summary>
+        <ul class="leaves">
+          <li>消息与派生记忆保留强来源索引</li>
+          <li>编辑、重生、删除后重新提炼<span class="leaf-detail text-small">定位受影响记录，撤下失效记忆</span></li>
+          <li>通知使用者处理状态与结果<span class="leaf-detail text-small">来源修复不等下一批 12 轮</span></li>
+        </ul>
+      </details>
+    </div>
+
+    <div class="tree-column">
+      <details class="branch removed" data-branch="removed" open>
+        <summary class="cursor-interaction"><span class="kind">移除</span><span class="branch-title">不进入 MOLite 的部分</span></summary>
+        <ul class="leaves">
+          <li>个人空间体系</li>
+          <li>NSG 与 Turso 向量存储</li>
+          <li>LSB 与图片载体</li>
+          <li>外部角色卡格式兼容<span class="leaf-detail text-small">普通 PNG 附件仍然支持</span></li>
+        </ul>
+      </details>
+
+      <details class="branch changed" data-branch="models" open>
+        <summary class="cursor-interaction"><span class="kind">明确</span><span class="branch-title">模型配置与请求</span></summary>
+        <ul class="leaves">
+          <li>先配置基础服务商<span class="leaf-detail text-small">地址、凭据、文本模型与视觉模型</span></li>
+          <li>再建立模型参数组<span class="leaf-detail text-small">选择模型、请求方式、具体请求参数</span></li>
+          <li>三个用途分别选择组<div class="sequence"><span class="step">对话</span><span class="step">记忆</span><span class="step">视觉回退</span></div></li>
+          <li>对话模型能看图 → 直接看原图<span class="leaf-detail text-small">只能读文本 → 视觉回退描述后再对话</span></li>
+          <li>保留三种模型接口<span class="leaf-detail text-small">Chat Completions · Responses · Anthropic Messages</span></li>
+        </ul>
+      </details>
+
+      <details class="branch added" data-branch="access" open>
+        <summary class="cursor-interaction"><span class="kind">新增</span><span class="branch-title">C ABI，形成三种接入</span></summary>
+        <ul class="leaves">
+          <li>Rust API 与 HTTP 保留</li>
+          <li>新增标准 C ABI</li>
+          <li>三种入口共用同一套 Core<div class="interfaces"><span>Rust API</span><span>HTTP</span><span>C ABI</span></div></li>
+        </ul>
+      </details>
+
+      <details class="branch pending" data-branch="pending">
+        <summary class="cursor-interaction"><span class="kind">待细化</span><span class="branch-title">工程契约与术语</span></summary>
+        <ul class="leaves">
+          <li>场景、会话的最终命名与映射<span class="leaf-detail text-small">已经理解区别，尚未强制统一命名</span></li>
+          <li>存储布局、MOC 数据映射</li>
+          <li>文件限额、上下文预算</li>
+          <li>接口契约、平台和性能指标</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('molite-design-map');
+      const branches = Array.from(root.querySelectorAll('details[data-branch]'));
+      const apply = (state) => {
+        const saved = state && state.privateContent && state.privateContent.branches;
+        if (!saved || typeof saved !== 'object') return;
+        for (const branch of branches) {
+          const value = saved[branch.dataset.branch];
+          if (typeof value === 'boolean') branch.open = value;
+        }
+      };
+      apply(window.openai && window.openai.widgetState);
+      window.addEventListener('openai:set_globals', (event) => {
+        apply(event.detail && event.detail.globals && event.detail.globals.widgetState);
+      });
+      root.addEventListener('click', (event) => {
+        if (!event.target.closest('summary')) return;
+        setTimeout(() => {
+          const selected = Object.fromEntries(branches.map((branch) => [branch.dataset.branch, branch.open]));
+          if (window.openai && window.openai.setWidgetState) {
+            Promise.resolve(window.openai.setWidgetState({
+              modelContent: null,
+              privateContent: { branches: selected }
+            })).catch(() => {});
+          }
+        }, 0);
+      });
+    })();
+  </script>
+</div>

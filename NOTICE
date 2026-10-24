@@ -1,5 +1,6 @@
 MOLite Core includes software derived from MOMO Core.
-Source revision: b01ec5e8744b0c549bb041ab22c31ba89f60d3a4
+Public source: https://github.com/ppisky/MOMO-core
+Verified public revision: ef8425d3ef872cc9ed4491fc1e923e5a4ba40b8b
 License: Apache License 2.0 (see LICENSE).
 
 src/vendor/moc.rs and tests/vendor/moc.rs originate from momo-moc.
