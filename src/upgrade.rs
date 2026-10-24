@@ -89,9 +89,7 @@ impl Store {
                 )?;
             }
             tx.execute("UPDATE scenes SET id=? WHERE id=?", params![temporary, old])?;
-            let before = format!("repair:{old}:");
-            let after = format!("repair:{temporary}:");
-            tx.execute("UPDATE maintenance_requests SET id=? || substr(id,length(?)+1) WHERE substr(id,1,length(?))=?",params![after,before,before,before])?;
+            move_repairs(&tx, old, temporary)?;
 
             tx.execute(
                 "UPDATE resources SET id=? WHERE kind='narrative_sources' AND id=?",
@@ -115,9 +113,7 @@ impl Store {
                 )?;
             }
             tx.execute("UPDATE scenes SET id=? WHERE id=?", params![new, temporary])?;
-            let before = format!("repair:{temporary}:");
-            let after = format!("repair:{new}:");
-            tx.execute("UPDATE maintenance_requests SET id=? || substr(id,length(?)+1) WHERE substr(id,1,length(?))=?",params![after,before,before,before])?;
+            move_repairs(&tx, temporary, new)?;
 
             tx.execute(
                 "UPDATE resources SET id=? WHERE kind='narrative_sources' AND id=?",
@@ -171,4 +167,23 @@ impl Store {
         tx.commit()?;
         Ok(())
     }
+}
+
+fn move_repairs(tx: &rusqlite::Transaction<'_>, old: &str, new: &str) -> Result<()> {
+    let keys = {
+        let mut q = tx.prepare("SELECT id FROM maintenance_requests")?;
+        q.query_map([], |r| r.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?
+    };
+    for key in keys {
+        if let Some((owner, revision)) = Store::repair_key_parts(&key)
+            && owner == old
+        {
+            tx.execute(
+                "UPDATE maintenance_requests SET id=? WHERE id=?",
+                params![format!("repair:{new}:{revision}"), key],
+            )?;
+        }
+    }
+    Ok(())
 }

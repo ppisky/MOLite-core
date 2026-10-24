@@ -206,3 +206,37 @@ fn ambiguous_legacy_shared_state_is_not_silently_split() {
         1
     );
 }
+
+#[test]
+fn deleting_a_conversation_preserves_other_captured_repairs_with_prefix_ids() {
+    let d = tempfile::tempdir().unwrap();
+    let mut s = Store::open(d.path()).unwrap();
+    for id in ["a", "a:b"] {
+        s.put_conversation(
+            Conversation {
+                id: id.into(),
+                title: id.into(),
+                character_ids: vec![],
+                injection_scope: vec![],
+                narrative: Default::default(),
+                ended: false,
+                classification: Default::default(),
+            },
+            None,
+        )
+        .unwrap();
+    }
+    let db = rusqlite::Connection::open(d.path().join("molite.sqlite3")).unwrap();
+    db.execute_batch(
+        "INSERT INTO maintenance_requests VALUES ('repair:a:1','[]'),('repair:a:b:1','[]')",
+    )
+    .unwrap();
+    s.delete_conversation("a", s.revision("a").unwrap())
+        .unwrap();
+    assert_eq!(
+        db.query_row("SELECT id FROM maintenance_requests", [], |r| r
+            .get::<_, String>(0))
+            .unwrap(),
+        "repair:a:b:1"
+    );
+}

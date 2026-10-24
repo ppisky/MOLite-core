@@ -145,6 +145,9 @@ impl Store {
         value["classification"] = serde_json::to_value(classification)?;
         self.put(kind, id, &value)
     }
+    pub(crate) fn repair_key_parts(key: &str) -> Option<(&str, &str)> {
+        key.strip_prefix("repair:")?.rsplit_once(':')
+    }
     pub fn delete_conversation(&mut self, id: &str, expected: i64) -> Result<()> {
         let _: Conversation = self.get("conversation", id)?;
         for value in self.list("conversation")? {
@@ -171,8 +174,17 @@ impl Store {
             "DELETE FROM requests WHERE json_extract(input,'$.request.conversation_id')=?",
             [id],
         )?;
-        let prefix = format!("repair:{id}:");
-        tx.execute("DELETE FROM maintenance_requests WHERE id IN (SELECT 'batch:' || id FROM batches WHERE scene=?) OR substr(id,1,length(?))=?",params![id,prefix,prefix])?;
+        tx.execute("DELETE FROM maintenance_requests WHERE id IN (SELECT 'batch:' || id FROM batches WHERE scene=?)",[id])?;
+        let repairs = {
+            let mut q = tx.prepare("SELECT id FROM maintenance_requests")?;
+            q.query_map([], |r| r.get::<_, String>(0))?
+                .collect::<std::result::Result<Vec<_>, _>>()?
+        };
+        for key in repairs {
+            if Self::repair_key_parts(&key).is_some_and(|(owner, _)| owner == id) {
+                tx.execute("DELETE FROM maintenance_requests WHERE id=?", [key])?;
+            }
+        }
         tx.execute(
             "DELETE FROM resources WHERE kind='narrative_sources' AND id=?",
             [id],

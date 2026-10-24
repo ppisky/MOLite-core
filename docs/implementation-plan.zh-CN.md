@@ -37,4 +37,6 @@ MOLite原生运行数据选择显式MOC扩展，与原版角色模块共存，�
 
 恢复 assistant、roleplay_director、memory_distillation、vision_fallback 四个提示词空间，内置 Markdown 默认文本、本地数据库覆盖、SHA-256 revision、替换/恢复默认及 HTTP 管理接口。三种宿主共用操作；新请求使用新内容，已捕获的请求与记忆维护重试保留原消息。提示词空间属于本地运行配置，不携带到 MOC。原生 MOC 容器仍为v3，MOLite运行数据扩展当前为version=2，不再接受本扩展的旧版schema。
 
-本次验收：独立构建目录 target/conversation-validation 下38项Release测试通过；Clippy、文档、HTTP/SSE、四个提示词空间管理、加密MOC往返及真实C宿主调用通过。现有运行进程保持原状，新二进制位于该目录的release子目录。
+本次验收：独立构建目录 target/conversation-validation 下39项Release测试通过；Clippy、文档、HTTP/SSE、四个提示词空间管理、加密MOC往返及真实C宿主调用通过。现有运行进程保持原状，新二进制位于该目录的release子目录。
+
+删除和升级修复请求按完整对话ID匹配，不按字符串前缀匹配；包含冒号的对话ID不会误清理其他对话的捕获任务，已加入回归验证。
