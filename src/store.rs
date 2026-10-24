@@ -152,12 +152,13 @@ impl Store {
         for id in &c.character_ids {
             let _: Character = self.get("character", id)?;
         }
-        if let Ok(old) = self.get::<Conversation>("conversation", &c.id) {
-            if old.scene_id != c.scene_id && !self.history(&c.id)?.is_empty() {
-                return Err(Error::Conflict(
-                    "cannot move nonempty conversation; change injection scope instead",
-                ));
-            }
+        if let Ok(old) = self.get::<Conversation>("conversation", &c.id)
+            && old.scene_id != c.scene_id
+            && !self.history(&c.id)?.is_empty()
+        {
+            return Err(Error::Conflict(
+                "cannot move nonempty conversation; change injection scope instead",
+            ));
         }
         self.put("conversation", &c.id, &c)
     }

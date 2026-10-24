@@ -1,0 +1,9 @@
+MOLite Core includes software derived from MOMO Core.
+Source revision: b01ec5e8744b0c549bb041ab22c31ba89f60d3a4
+License: Apache License 2.0 (see LICENSE).
+
+src/vendor/moc.rs and tests/vendor/moc.rs originate from momo-moc.
+src/vendor/crypto.rs and tests/vendor/crypto.rs originate from momo-crypto.
+Only test module paths were changed on import. Further changes are recorded in Git.
+MOLite's DMW-only runtime and provider adapter follow the MOMO design, with no
+Space ownership, NSG engine, vector storage or external character card support.

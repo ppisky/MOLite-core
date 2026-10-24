@@ -7,8 +7,18 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+#[path = "vendor/crypto.rs"]
+pub mod crypto;
 pub mod domain;
+#[allow(unsafe_code)]
+pub mod ffi;
+pub mod http;
 pub mod memory;
+#[path = "vendor/moc.rs"]
+pub mod moc;
+pub mod model;
+pub mod portable;
+pub mod runtime;
 pub mod store;
 
 #[derive(Debug, thiserror::Error)]

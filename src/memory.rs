@@ -312,20 +312,20 @@ impl Store {
             }
         }
         // A late batch may add facts, but cannot roll the current narrative back.
-        if let Some(narrative) = &patch.narrative {
-            if current_revision == job.revision {
-                let body: String = tx.query_row(
-                    "SELECT body FROM resources WHERE kind='scene' AND id=?",
-                    [&job.scene_id],
-                    |r| r.get(0),
-                )?;
-                let mut scene: Scene = serde_json::from_str(&body)?;
-                scene.narrative = narrative.clone();
-                tx.execute(
-                    "UPDATE resources SET body=?,revision=revision+1 WHERE kind='scene' AND id=?",
-                    params![serde_json::to_string(&scene)?, job.scene_id],
-                )?;
-            }
+        if let Some(narrative) = &patch.narrative
+            && current_revision == job.revision
+        {
+            let body: String = tx.query_row(
+                "SELECT body FROM resources WHERE kind='scene' AND id=?",
+                [&job.scene_id],
+                |r| r.get(0),
+            )?;
+            let mut scene: Scene = serde_json::from_str(&body)?;
+            scene.narrative = narrative.clone();
+            tx.execute(
+                "UPDATE resources SET body=?,revision=revision+1 WHERE kind='scene' AND id=?",
+                params![serde_json::to_string(&scene)?, job.scene_id],
+            )?;
         }
         if let Some(id) = job.batch_id {
             for e in &job.evidence {
@@ -463,11 +463,11 @@ impl Store {
                 if let Some((s, linked, _, _)) = candidates
                     .iter()
                     .find(|(s, m, _, _)| s == scene && &m.id == link)
+                    && linked.body.len() <= budget
+                    && seen.insert((s.clone(), linked.id.clone()))
                 {
-                    if linked.body.len() <= budget && seen.insert((s.clone(), linked.id.clone())) {
-                        budget -= linked.body.len();
-                        chosen.push((s.clone(), linked.clone()));
-                    }
+                    budget -= linked.body.len();
+                    chosen.push((s.clone(), linked.clone()));
                 }
             }
         }
