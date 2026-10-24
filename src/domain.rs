@@ -39,6 +39,9 @@ pub struct ModelGroup {
     pub id: String,
     pub model_id: String,
     pub protocol: Protocol,
+    /// None uses the purpose default; explicit values are honored for every use.
+    #[serde(default)]
+    pub stream: Option<bool>,
     #[serde(default = "empty_object")]
     pub parameters: Value,
     #[serde(default = "timeout")]

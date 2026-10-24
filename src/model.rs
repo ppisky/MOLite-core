@@ -85,6 +85,7 @@ impl Connection {
         stream: bool,
         events: Option<&UnboundedSender<Value>>,
     ) -> Result<String> {
+        let stream = self.group.stream.unwrap_or(stream);
         let suffix = match self.group.protocol {
             Protocol::ChatCompletions => "chat/completions",
             Protocol::Responses => "responses",

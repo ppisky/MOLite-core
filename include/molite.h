@@ -2,7 +2,7 @@
 #define MOLITE_H
 #include <stdint.h>
 #include <stddef.h>
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(MOLITE_STATIC)
 #define MOLITE_API __declspec(dllimport)
 #else
 #define MOLITE_API

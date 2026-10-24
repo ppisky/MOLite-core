@@ -13,6 +13,16 @@ struct Mock {
 }
 async fn provider(State(s): State<Mock>, Json(v): Json<Value>) -> Response {
     s.calls.lock().unwrap().push(v.clone());
+    if v["model"] == "broken" {
+        return (
+            [("content-type", "text/event-stream")],
+            format!(
+                "data: {}\n\n",
+                json!({"choices":[{"delta":{"content":"partial"},"finish_reason":null}]})
+            ),
+        )
+            .into_response();
+    }
     let output = if v["model"] == "memory" {
         r#"{"upsert":[],"narrative":null}"#
     } else if v["model"] == "vision" {
@@ -147,6 +157,69 @@ async fn image_route_uses_fallback_only_for_text_models() {
         }
         server.abort();
     }
+}
+
+#[tokio::test]
+async fn regeneration_and_explicit_group_stream_do_not_add_turns() {
+    let (_d, e, mock, server) = setup(Protocol::Responses, false).await;
+    e.execute(json!({"op":"group.put","value":{"id":"chat","model_id":"chat","protocol":"responses","stream":false,"parameters":{}}}),None).await.unwrap();
+    e.execute(
+        json!({"op":"chat","request":{"request_id":"q","conversation_id":"c","text":"hello"}}),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(mock.calls.lock().unwrap()[0]["stream"], false);
+    let regenerated = e
+        .execute(
+            json!({"op":"exchange.regenerate","request_id":"q","revision":1}),
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(regenerated["exchange"]["revision"], 2);
+    let status = e
+        .execute(json!({"op":"extraction.status","scene_id":"s"}), None)
+        .await
+        .unwrap();
+    assert_eq!(status["schedule"]["pending_turns"], 1);
+    assert_eq!(
+        e.execute(json!({"op":"history","conversation_id":"c"}), None)
+            .await
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    server.abort();
+}
+
+#[tokio::test]
+async fn interrupted_stream_never_commits_and_retries_keep_captured_model() {
+    let (_d, e, _mock, server) = setup(Protocol::ChatCompletions, false).await;
+    e.execute(json!({"op":"model.put","value":{"id":"broken","provider_id":"p","model":"broken","vision":false}}),None).await.unwrap();
+    e.execute(json!({"op":"group.put","value":{"id":"chat","model_id":"broken","protocol":"chat_completions"}}),None).await.unwrap();
+    let request =
+        json!({"op":"chat","request":{"request_id":"q","conversation_id":"c","text":"hello"}});
+    assert!(e.execute(request.clone(), None).await.is_err());
+    e.execute(json!({"op":"group.put","value":{"id":"chat","model_id":"chat","protocol":"chat_completions"}}),None).await.unwrap();
+    assert!(e.execute(request, None).await.is_err());
+    assert!(
+        e.execute(json!({"op":"history","conversation_id":"c"}), None)
+            .await
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    e.execute(
+        json!({"op":"chat","request":{"request_id":"new","conversation_id":"c","text":"hello"}}),
+        None,
+    )
+    .await
+    .unwrap();
+    server.abort();
 }
 #[tokio::test]
 async fn http_uses_shared_operations_and_checks_token() {

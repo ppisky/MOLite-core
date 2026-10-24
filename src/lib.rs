@@ -1,8 +1,6 @@
-//! MOLite's scene-scoped durable distillation scheduler.
-//!
-//! A model worker receives a frozen batch from `begin` and commits its validated
-//! result with `complete`. A failed worker leaves the batch available for retry.
-//! This crate currently implements scheduling, not the complete MO State runtime.
+//! MOLite Core: scene-scoped DMW / MO State, native MOC, and three host interfaces.
+//! Use [`runtime::Engine`] for orchestration or [`store::Store`] for typed local
+//! operations. [`Scheduler`] remains available as a standalone durable scheduler.
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::path::Path;

@@ -121,3 +121,56 @@ fn forged_sources_are_rejected_without_acknowledging_batch() {
         1
     );
 }
+
+#[test]
+fn repair_preserves_unrelated_facts_and_scopes_require_explicit_selection() {
+    let (_d, mut s) = setup();
+    for (request, word) in [("a", "伤口"), ("b", "旅行")] {
+        record(&mut s, request);
+        let job = s.begin_extraction("s", true).unwrap().unwrap();
+        let m = Memory {
+            id: request.into(),
+            kind: "event".into(),
+            title: word.into(),
+            body: word.into(),
+            tags: vec![],
+            aliases: vec![],
+            links: vec![],
+            core: false,
+            weight: 1.0,
+            sources: vec![Source {
+                request_id: request.into(),
+                revision: 1,
+            }],
+        };
+        s.apply_extraction(
+            &job,
+            &MemoryPatch {
+                upsert: vec![m],
+                narrative: None,
+            },
+        )
+        .unwrap();
+    }
+    s.revise_exchange("a", 1, None, None, true).unwrap();
+    let repair = s.begin_extraction("s", false).unwrap().unwrap();
+    assert_eq!(repair.affected_ids, vec!["a"]);
+    assert!(repair.evidence.is_empty());
+    s.apply_extraction(&repair, &MemoryPatch::default())
+        .unwrap();
+    assert_eq!(s.snapshot("s", "旅行").unwrap().memories.len(), 1);
+    let mut other = Scene {
+        id: "other".into(),
+        title: "other".into(),
+        injection_scope: vec![],
+        narrative: Default::default(),
+        ended: false,
+        classification: Default::default(),
+    };
+    s.put_scene(other.clone(), None).unwrap();
+    assert!(s.snapshot("other", "旅行").unwrap().memories.is_empty());
+    other.injection_scope = vec!["s".into()];
+    s.put_scene(other, None).unwrap();
+    assert_eq!(s.snapshot("other", "旅行").unwrap().memories.len(), 1);
+    assert!(s.delete_scene("s", s.revision("s").unwrap()).is_err());
+}

@@ -39,6 +39,7 @@ impl Store {
         include_files: bool,
         password: Option<&str>,
     ) -> Result<Value> {
+        let _read_snapshot = self.scheduler.db.unchecked_transaction()?;
         if output.exists() {
             return Err(Error::Conflict("export path already exists"));
         }
@@ -104,7 +105,13 @@ impl Store {
             let metadata = json!({"id":format!("urn:uuid:{uuid}"),"name":c.name,"version":c.version,"author":{"name":c.author_name},"character_file":"character.md","user_file":"user.md"});
             let mut metadata: toml::Value = serde_json::from_value(metadata).map_err(err)?;
             if c.opening_markdown.is_some() {
-                metadata.as_table_mut().ok_or(Error::Invalid("native metadata must be a table"))?.insert("opening_file".into(),toml::Value::String("opening.md".into()));
+                metadata
+                    .as_table_mut()
+                    .ok_or(Error::Invalid("native metadata must be a table"))?
+                    .insert(
+                        "opening_file".into(),
+                        toml::Value::String("opening.md".into()),
+                    );
             }
             fs::write(
                 directory.join("character.toml"),
@@ -309,8 +316,9 @@ impl Store {
                 let directory = path.parent().ok_or(Error::Invalid("invalid role path"))?;
                 let metadata: toml::Value =
                     toml::from_str(&fs::read_to_string(&path)?).map_err(err)?;
-                let id = metadata["id"]
-                    .as_str()
+                let id = metadata
+                    .get("id")
+                    .and_then(toml::Value::as_str)
                     .and_then(|s| s.strip_prefix("urn:uuid:"))
                     .ok_or(Error::Invalid("invalid native character URN"))?;
                 let uuid = uuid::Uuid::parse_str(id).map_err(err)?;
@@ -415,6 +423,7 @@ fn sql_value(v: &Value) -> Result<SqlValue> {
     }
 }
 fn validate_bundle(s: &Store) -> Result<()> {
+    let mut expected_sources = 0i64;
     for kind in ["provider", "model", "group", "settings"] {
         if !s.list(kind)?.is_empty() {
             return Err(Error::Invalid(
@@ -463,7 +472,14 @@ fn validate_bundle(s: &Store) -> Result<()> {
         if m.id != id {
             return Err(Error::Invalid("memory identity mismatch"));
         }
+        expected_sources += m.sources.len() as i64;
         for source in m.sources {
+            let indexed:i64=s.scheduler.db.query_row("SELECT COUNT(*) FROM sources WHERE scene=? AND memory_id=? AND request=? AND revision=?",params![scene,id,source.request_id,source.revision],|r|r.get(0))?;
+            if indexed != 1 {
+                return Err(Error::Invalid(
+                    "imported source index does not match document",
+                ));
+            }
             let body: String = s.scheduler.db.query_row(
                 "SELECT body FROM exchanges WHERE request=? AND scene=?",
                 params![source.request_id, scene],
@@ -474,6 +490,14 @@ fn validate_bundle(s: &Store) -> Result<()> {
                 return Err(Error::Invalid("stale imported memory provenance"));
             }
         }
+    }
+    let extra:i64=s.scheduler.db.query_row("SELECT COUNT(*) FROM sources s LEFT JOIN memory m ON m.scene=s.scene AND m.id=s.memory_id WHERE m.id IS NULL",[],|r|r.get(0))?;
+    let count: i64 = s
+        .scheduler
+        .db
+        .query_row("SELECT COUNT(*) FROM sources", [], |r| r.get(0))?;
+    if extra != 0 || count != expected_sources {
+        return Err(Error::Invalid("orphan imported source index"));
     }
     Ok(())
 }

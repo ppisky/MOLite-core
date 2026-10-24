@@ -22,7 +22,8 @@ impl Store {
         CREATE TABLE IF NOT EXISTS runtime(scene TEXT PRIMARY KEY,revision INTEGER NOT NULL DEFAULT 0,activity INTEGER NOT NULL DEFAULT 0,repair INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,scene TEXT NOT NULL,kind TEXT NOT NULL,body TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS snapshots(id TEXT PRIMARY KEY,scene TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY,input TEXT NOT NULL,result TEXT);")?;
+        CREATE TABLE IF NOT EXISTS requests(id TEXT PRIMARY KEY,input TEXT NOT NULL,result TEXT);
+        CREATE TABLE IF NOT EXISTS maintenance_requests(id TEXT PRIMARY KEY,body TEXT NOT NULL);")?;
         std::fs::create_dir_all(root.join("files"))?;
         Ok(Self { scheduler, root })
     }
@@ -113,7 +114,8 @@ impl Store {
         self.put("settings", "purposes", &p)
     }
     pub fn put_character(&self, c: Character) -> Result<()> {
-        if c.name.trim().is_empty()
+        if uuid::Uuid::parse_str(&c.id).is_err()
+            || c.name.trim().is_empty()
             || c.author_name.trim().is_empty()
             || c.character_markdown.len() > 200_000
             || semver::Version::parse(&c.version).is_err()
@@ -121,6 +123,85 @@ impl Store {
             return Err(Error::Invalid("invalid native character"));
         }
         self.put("character", &c.id, &c)
+    }
+
+    /// Classification never changes scene selection or memory provenance.
+    pub fn classify(&self, kind: &str, id: &str, classification: Classification) -> Result<()> {
+        if !["scene", "conversation", "character", "file"].contains(&kind) {
+            return Err(Error::Invalid("resource cannot be classified"));
+        }
+        if classification.tags.len() > 100
+            || classification.tags.iter().any(|t| t.len() > 200)
+            || classification
+                .folder
+                .as_ref()
+                .is_some_and(|s| s.len() > 1000)
+        {
+            return Err(Error::Invalid("classification exceeds limits"));
+        }
+        let mut value: Value = self.get(kind, id)?;
+        value["classification"] = serde_json::to_value(classification)?;
+        self.put(kind, id, &value)
+    }
+    pub fn delete_scene(&mut self, id: &str, expected: i64) -> Result<()> {
+        let _: Scene = self.get("scene", id)?;
+        for value in self.list("scene")? {
+            let scene: Scene = serde_json::from_value(value)?;
+            if scene.id != id && scene.injection_scope.iter().any(|scope| scope == id) {
+                return Err(Error::Conflict(
+                    "scene is referenced by an injection scope; switch that scope first",
+                ));
+            }
+        }
+        let tx = self
+            .scheduler
+            .db
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let revision: i64 =
+            tx.query_row("SELECT revision FROM runtime WHERE scene=?", [id], |r| {
+                r.get(0)
+            })?;
+        if revision != expected {
+            return Err(Error::Conflict("scene revision changed"));
+        }
+        tx.execute(
+            "DELETE FROM requests WHERE id IN (SELECT request FROM exchanges WHERE scene=?)",
+            [id],
+        )?;
+        tx.execute(
+            "DELETE FROM resources WHERE kind='conversation' AND json_extract(body,'$.scene_id')=?",
+            [id],
+        )?;
+        for table in [
+            "sources",
+            "memory",
+            "snapshots",
+            "turns",
+            "batches",
+            "exchanges",
+            "runtime",
+        ] {
+            tx.execute(&format!("DELETE FROM {table} WHERE scene=?"), [id])?;
+        }
+        tx.execute("DELETE FROM scenes WHERE id=?", [id])?;
+        tx.execute("DELETE FROM resources WHERE kind='scene' AND id=?", [id])?;
+        tx.execute(
+            "INSERT INTO events(scene,kind,body) VALUES (?,'scene.deleted','{}')",
+            [id],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+    pub fn delete_file(&self, id: &str) -> Result<()> {
+        let _: DataFile = self.get("file", id)?;
+        let used:bool=self.scheduler.db.query_row("SELECT EXISTS(SELECT 1 FROM exchanges,json_each(exchanges.body,'$.attachments') WHERE json_each.value=?)",[id],|r|r.get(0))?;
+        if used {
+            return Err(Error::Conflict("data file is retained as message evidence"));
+        }
+        self.scheduler
+            .db
+            .execute("DELETE FROM resources WHERE kind='file' AND id=?", [id])?;
+        Ok(())
     }
     pub fn put_scene(&mut self, s: Scene, expected: Option<i64>) -> Result<()> {
         for scope in &s.injection_scope {
@@ -143,6 +224,10 @@ impl Store {
         }
         tx.execute("INSERT OR IGNORE INTO scenes(id) VALUES (?)", [&s.id])?;
         tx.execute("INSERT INTO resources(kind,id,body) VALUES ('scene',?,?) ON CONFLICT(kind,id) DO UPDATE SET body=excluded.body,revision=resources.revision+1",params![s.id,serde_json::to_string(&s)?])?;
+        tx.execute(
+            "DELETE FROM resources WHERE kind='narrative_sources' AND id=?",
+            [&s.id],
+        )?;
         Self::event_tx(&tx, &s.id, "scene.updated", &json!({}))?;
         tx.commit()?;
         Ok(())

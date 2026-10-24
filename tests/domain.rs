@@ -22,6 +22,7 @@ fn configuration_is_reusable_and_scope_is_explicit() {
         id: "g".into(),
         model_id: "m".into(),
         protocol: Protocol::Responses,
+        stream: None,
         parameters: json!({"temperature":0.3}),
         timeout_seconds: 30,
     })
